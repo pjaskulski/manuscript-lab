@@ -118,12 +118,12 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Przed użyciem dostosuj:
+Przed użyciem należy dostosować:
 - `User`, `Group`, `WorkingDirectory`, `PATH` i `ExecStart` w `deploy/manuscript-lab.service`,
 - `server_name` oraz ścieżki `alias` w `deploy/manuscript-lab.nginx.conf`,
 - wartość `SECRET_KEY` w usłudze `systemd`.
 
-## Struktura
+## Struktura folderów i plików
 
 ```text
 app/
