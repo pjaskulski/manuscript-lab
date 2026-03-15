@@ -19,6 +19,22 @@ def compute_htr_metrics(reference: str, candidate: str, profile: str = "lowercas
     }
 
 
+def compute_corpus_htr_metrics(
+    references: list[str],
+    candidates: list[str],
+    profile: str = "lowercase",
+) -> dict:
+    reference_norm = "\n".join(normalize_text(text, profile=profile) for text in references)
+    candidate_norm = "\n".join(normalize_text(text, profile=profile) for text in candidates)
+
+    return {
+        "reference_normalized": reference_norm,
+        "candidate_normalized": candidate_norm,
+        "wer": wer(reference_norm, candidate_norm),
+        "cer": cer(reference_norm, candidate_norm),
+    }
+
+
 def _highlight_inline_diff(reference: str, candidate: str) -> tuple[str, str]:
     matcher = SequenceMatcher(None, reference, candidate)
     reference_parts: list[str] = []

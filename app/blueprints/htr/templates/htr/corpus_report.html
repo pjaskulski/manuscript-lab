@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Raport zbiorczy HTR{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem; row-gap: .75rem;">
+    <div>
+        <h1 style="margin-bottom: .35rem;">Raport zbiorczy HTR</h1>
+        <div class="muted">CER i WER są liczone ponownie dla całego zbioru zapisanych porównań w danej grupie, a nie jako średnia wyników ze skanów.</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <h2>Lista modeli</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Model</th>
+                <th>Normalizacja</th>
+                <th>Porównania</th>
+                <th>Skany</th>
+                <th>CER zbiorcze</th>
+                <th>WER zbiorcze</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group.candidate_label }}</td>
+                <td>{{ group.normalization_profile or '-' }}</td>
+                <td>{{ group.comparison_count }}</td>
+                <td>{{ group.scan_count }}</td>
+                <td>{{ '%.2f'|format(group.cer * 100) }}%</td>
+                <td>{{ '%.2f'|format(group.wer * 100) }}%</td>
+                <td>
+                    <a class="btn" href="{{ url_for('htr.corpus_report', reference_text_type=group.reference_text_type, reference_source_model=group.reference_source_model, candidate_text_type=group.candidate_text_type, candidate_source_model=group.candidate_source_model, normalization_profile=group.normalization_profile) }}">Skład</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">Brak zapisanych porównań HTR do agregacji.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if selected_group %}
+<div class="card" style="margin-top: 1rem;">
+    <h2>Lista porównywanych skanów</h2>
+    <p><strong>Model:</strong> {{ selected_group.candidate_label }}</p>
+    <p class="muted">Profil normalizacji: {{ selected_group.normalization_profile or '-' }}</p>
+    <table>
+        <thead>
+            <tr>
+                <th>ID porównania</th>
+                <th>Skan</th>
+                <th>CER skanu</th>
+                <th>WER skanu</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for comparison in selected_group.comparisons %}
+            <tr>
+                <td>{{ comparison.id }}</td>
+                <td><a href="{{ url_for('scans.scan_detail', scan_id=comparison.scan.id) }}">#{{ comparison.scan.id }} — {{ comparison.scan.title }}</a></td>
+                <td>{{ '%.2f'|format((comparison.cer or 0) * 100) }}%</td>
+                <td>{{ '%.2f'|format((comparison.wer or 0) * 100) }}%</td>
+                <td><a class="btn" href="{{ url_for('htr.view_comparison', comparison_id=comparison.id, next=request.full_path) }}">Szczegóły</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

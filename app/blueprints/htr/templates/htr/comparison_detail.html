@@ -4,7 +4,7 @@
 <div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
     <h1>Porównanie HTR #{{ comparison.id }}</h1>
     <div class="actions">
-        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=comparison.scan.id) }}">Wróć do skanu</a>
+        <a class="btn" href="{{ back_url }}">{{ back_label }}</a>
         <form method="post" action="{{ url_for('htr.delete_comparison', comparison_id=comparison.id) }}" onsubmit="return confirm('Usunąć porównanie HTR?');">
             <button class="btn btn-danger" type="submit">Usuń porównanie</button>
         </form>
