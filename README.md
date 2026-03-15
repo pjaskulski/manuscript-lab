@@ -2,8 +2,6 @@
 
 Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem dokumentów.
 
-## Zakres MVP
-
 ### Moduł „Skany”
 - dodawanie i edycja definicji skanów,
 - upload obrazu skanu,
