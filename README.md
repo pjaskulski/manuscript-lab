@@ -92,7 +92,7 @@ gunicorn -w 2 -b 127.0.0.1:8000 "run:app"
 Uwagi wdrożeniowe:
 - dla SQLite aplikacja ustawia `WAL` i `busy_timeout`, co pomaga przy małej liczbie równoczesnych zapisów,
 - przy równoczesnej edycji tego samego rekordu druga osoba dostanie komunikat o konflikcie zamiast cichego nadpisania,
-- przy pracy w sieci koniecznie ustaw własny `SECRET_KEY`.
+- przy pracy w sieci należy ustawić własny `SECRET_KEY`.
 
 Logowanie użytkowników:
 
@@ -141,4 +141,4 @@ README.md
 
 ## Uwagi
 - obrazy skanów są zapisywane na dysku w `instance/uploads/scans/`,
-- baza SQLite jest wystarczająca dla prototypu i małego zespołu
+- baza SQLite - wystarczająca dla prototypu i małego zespołu
