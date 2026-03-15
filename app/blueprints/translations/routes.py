@@ -5,6 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from ...extensions import db
 from ...models import Document, TranslationComparison, TranslationVariant
+from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ...services.bleu_metrics import (
     compute_bleu,
     compute_chrf,
@@ -80,7 +81,10 @@ def edit_variant(variant_id: int):
     form = TranslationVariantForm(obj=variant)
     _configure_model_choices(form, current_value=variant.source_display)
     cancel_url = url_for("documents.document_detail", document_id=variant.document_id)
+    if request.method == "GET":
+        bind_version_token(form, variant)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, variant)
         form.populate_obj(variant)
         variant.source_tool = None
         variant.source_model = (form.source_model.data or "").strip() or None

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Logowanie{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 28rem; margin: 2rem auto;">
+    <h1>Logowanie</h1>
+    <form method="post">
+        {{ form.hidden_tag() }}
+        <div>{{ form.username.label }} {{ form.username(autofocus=true) }}</div>
+        <div>{{ form.password.label }} {{ form.password() }}</div>
+        <div class="actions">
+            {{ form.submit(class_="btn btn-primary") }}
+        </div>
+    </form>
+</div>
+{% endblock %}

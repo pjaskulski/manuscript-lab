@@ -7,7 +7,12 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #1f2937; }
         header { background: #1f3a5f; color: white; padding: 1rem 1.5rem; }
-        nav a { color: white; margin-right: 1rem; text-decoration: none; font-weight: 600; }
+        .topbar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
+        nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+        nav a { color: white; text-decoration: none; font-weight: 600; }
+        .user-nav { display: flex; gap: .75rem; align-items: center; }
+        .user-nav form { margin: 0; }
+        .btn.btn-ghost { background: transparent; color: white; border-color: rgba(255,255,255,.45); }
         main { max-width: 1200px; margin: 1.5rem auto; background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
         .grid { display: grid; gap: 1rem; }
         .grid-2 { grid-template-columns: 1fr 1fr; }
@@ -28,7 +33,7 @@
         .flash.warning { background: #fef3c7; }
         .flash.danger { background: #fee2e2; }
         label { display: block; font-weight: 600; margin-bottom: .3rem; }
-        input[type="text"], input[type="number"], textarea, select { width: 100%; padding: .6rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        input[type="text"], input[type="password"], input[type="number"], textarea, select { width: 100%; padding: .6rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
         .checkbox-field { display: flex; align-items: center; gap: .55rem; }
         .checkbox-field label { display: inline; margin: 0; }
         .checkbox-field input[type="checkbox"] { width: auto; margin: 0; }
@@ -68,14 +73,28 @@
 </head>
 <body>
 <header>
-    <nav>
-        <a href="{{ url_for('main.index') }}">Start</a>
-        <a href="{{ url_for('scans.list_scans') }}">Skany</a>
-        <a href="{{ url_for('documents.list_documents') }}">Dokumenty</a>
-        <a href="{{ url_for('parameters.index') }}">Parametry</a>
-        <a href="{{ url_for('htr.corpus_report') }}">Raport jakości HTR</a>
-        <a href="{{ url_for('translations.corpus_report') }}">Raport jakości tłumaczeń</a>
-    </nav>
+    <div class="topbar">
+        <nav>
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('main.index') }}">Start</a>
+                <a href="{{ url_for('scans.list_scans') }}">Skany</a>
+                <a href="{{ url_for('documents.list_documents') }}">Dokumenty</a>
+                <a href="{{ url_for('parameters.index') }}">Parametry</a>
+                <a href="{{ url_for('htr.corpus_report') }}">Raport jakości HTR</a>
+                <a href="{{ url_for('translations.corpus_report') }}">Raport jakości tłumaczeń</a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}">Logowanie</a>
+            {% endif %}
+        </nav>
+        {% if current_user.is_authenticated %}
+            <div class="user-nav">
+                <span>Zalogowano: <strong>{{ current_user.username }}</strong></span>
+                <form method="post" action="{{ url_for('auth.logout') }}">
+                    <button type="submit" class="btn btn-ghost">Wyloguj</button>
+                </form>
+            </div>
+        {% endif %}
+    </div>
 </header>
 <main>
     {% with messages = get_flashed_messages(with_categories=true) %}

@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, SelectField, StringField, SubmitField, TextAreaField
+from wtforms import BooleanField, HiddenField, SelectField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 
 
@@ -24,6 +24,7 @@ GROUND_TRUTH_TEXT_TYPES = {
 
 
 class ScanTextForm(FlaskForm):
+    version_token = HiddenField()
     text_type = SelectField("Typ tekstu", validators=[DataRequired()], choices=TEXT_TYPES)
     label = StringField("Uwagi", validators=[Optional()])
     source_model = SelectField("Model", validators=[DataRequired()], choices=[])
@@ -34,6 +35,7 @@ class ScanTextForm(FlaskForm):
 
 
 class ScanTextWorkspaceForm(FlaskForm):
+    version_token = HiddenField()
     content = TextAreaField("Treść", validators=[DataRequired()])
     submit = SubmitField("Zapisz")
 

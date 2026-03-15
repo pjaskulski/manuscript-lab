@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ...extensions import db
 from ...models import Document, DocumentScanLink, Scan, ScanText, TranslationComparison, TranslationVariant
+from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ...services.bleu_metrics import compute_bleu, compute_chrf
 from ...services.document_builder import build_document_text_from_scan_texts
 from .forms import DocumentForm, LinkScanForm
@@ -155,7 +156,10 @@ def edit_document(document_id: int):
     document = Document.query.get_or_404(document_id)
     form = DocumentForm(obj=document)
     cancel_url = request.args.get("next") or url_for("documents.document_detail", document_id=document.id)
+    if request.method == "GET":
+        bind_version_token(form, document)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, document)
         form.populate_obj(document)
         if not document.document_code:
             document.document_code = None
@@ -219,8 +223,11 @@ def edit_link(link_id: int):
 
     form = LinkScanForm(obj=link)
     form.scan_id.choices = [(scan.id, f"{scan.id} | {scan.title} | {scan.folio or '-'}") for scan in available_scans]
+    if request.method == "GET":
+        bind_version_token(form, link)
 
     if form.validate_on_submit():
+        ensure_version_token_matches(form, link)
         link.scan_id = form.scan_id.data
         link.ordering = form.ordering.data
         db.session.commit()

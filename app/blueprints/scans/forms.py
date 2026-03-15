@@ -1,10 +1,11 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, FileField
-from wtforms import BooleanField, IntegerField, StringField, SubmitField, TextAreaField
+from wtforms import BooleanField, HiddenField, IntegerField, StringField, SubmitField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 
 
 class ScanForm(FlaskForm):
+    version_token = HiddenField()
     title = StringField("Tytuł", validators=[DataRequired()])
     shelfmark = StringField("Sygnatura", validators=[Optional()])
     folio = StringField("Folio", validators=[Optional()])

@@ -3,6 +3,7 @@ from .htr import HTRComparison
 from .parameter import ParameterModel
 from .scan import Scan, ScanText
 from .translation import TranslationComparison, TranslationVariant
+from .user import User
 
 __all__ = [
     "Document",
@@ -13,4 +14,5 @@ __all__ = [
     "ScanText",
     "TranslationComparison",
     "TranslationVariant",
+    "User",
 ]

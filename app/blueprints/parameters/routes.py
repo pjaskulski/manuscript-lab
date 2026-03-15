@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ...extensions import db
 from ...models import ParameterModel, ScanText, TranslationVariant
+from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ...services.model_registry import (
     MANUAL_MODEL_NAME,
     MODEL_SCOPE_HTR,
@@ -88,7 +89,10 @@ def edit_model(model_id: int):
     model = ParameterModel.query.get_or_404(model_id)
     form = ParameterModelForm(obj=model)
     cancel_url = url_for("parameters.index")
+    if request.method == "GET":
+        bind_version_token(form, model)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, model)
         name = (form.name.data or "").strip()
         exists = (
             ParameterModel.query.filter_by(scope=model.scope, name=name)

@@ -82,6 +82,47 @@ Start aplikacji:
 python run.py
 ```
 
+Praca produkcyjna (`nginx` + `gunicorn`):
+
+```bash
+export SECRET_KEY="zmien-to-na-losowy-sekret"
+gunicorn -w 2 -b 127.0.0.1:8000 "run:app"
+```
+
+Uwagi wdrożeniowe:
+- dla SQLite aplikacja ustawia `WAL` i `busy_timeout`, co pomaga przy małej liczbie równoczesnych zapisów,
+- przy równoczesnej edycji tego samego rekordu druga osoba dostanie komunikat o konflikcie zamiast cichego nadpisania,
+- przy pracy w sieci koniecznie ustaw własny `SECRET_KEY`.
+
+Logowanie użytkowników:
+
+```bash
+flask --app run.py create-user
+```
+
+Po utworzeniu pierwszego użytkownika logowanie jest dostępne pod `/auth/login`, a pozostałe widoki wymagają zalogowania.
+
+Przykładowe pliki wdrożeniowe:
+- `deploy/manuscript-lab.service` - usługa `systemd` dla `gunicorn`,
+- `deploy/manuscript-lab.nginx.conf` - przykładowy vhost `nginx`.
+
+Przykładowe wdrożenie na serwerze:
+
+```bash
+sudo cp deploy/manuscript-lab.service /etc/systemd/system/manuscript-lab.service
+sudo cp deploy/manuscript-lab.nginx.conf /etc/nginx/sites-available/manuscript-lab
+sudo ln -s /etc/nginx/sites-available/manuscript-lab /etc/nginx/sites-enabled/manuscript-lab
+sudo systemctl daemon-reload
+sudo systemctl enable --now manuscript-lab
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Przed użyciem dostosuj:
+- `User`, `Group`, `WorkingDirectory`, `PATH` i `ExecStart` w `deploy/manuscript-lab.service`,
+- `server_name` oraz ścieżki `alias` w `deploy/manuscript-lab.nginx.conf`,
+- wartość `SECRET_KEY` w usłudze `systemd`.
+
 ## Struktura
 
 ```text

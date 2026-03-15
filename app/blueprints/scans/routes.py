@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 
 from ...extensions import db
 from ...models import HTRComparison, Scan, ScanText
+from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ..htr.forms import GROUND_TRUTH_TEXT_TYPES
 from ...services.file_storage import save_scan_image
 from .forms import ScanForm, ScanTrainingExportForm
@@ -251,7 +252,10 @@ def edit_scan(scan_id: int):
     scan = Scan.query.get_or_404(scan_id)
     form = ScanForm(obj=scan)
     cancel_url = request.args.get("next") or url_for("scans.scan_detail", scan_id=scan.id)
+    if request.method == "GET":
+        bind_version_token(form, scan)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, scan)
         form.populate_obj(scan)
         if form.image_file.data:
             try:

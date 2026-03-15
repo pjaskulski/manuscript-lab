@@ -5,6 +5,7 @@ from sqlalchemy.orm import joinedload
 
 from ...extensions import db
 from ...models import HTRComparison, Scan, ScanText
+from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ...services.htr_metrics import compute_corpus_htr_metrics, compute_htr_metrics, make_html_diff
 from ...services.model_registry import MANUAL_MODEL_NAME, MODEL_SCOPE_HTR, get_model_choices
 from ...services.text_normalization import normalize_text
@@ -93,7 +94,10 @@ def edit_scan_text(text_id: int):
     form = ScanTextForm(obj=text)
     _configure_model_choices(form, current_value=text.source_display)
     cancel_url = url_for("scans.scan_detail", scan_id=text.scan_id)
+    if request.method == "GET":
+        bind_version_token(form, text)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, text)
         form.populate_obj(text)
         text.source_tool = None
         text.source_model = (form.source_model.data or "").strip() or None
@@ -116,7 +120,10 @@ def workspace_scan_text(text_id: int):
     text = ScanText.query.get_or_404(text_id)
     form = ScanTextWorkspaceForm(obj=text)
     cancel_url = url_for("scans.scan_detail", scan_id=text.scan_id)
+    if request.method == "GET":
+        bind_version_token(form, text)
     if form.validate_on_submit():
+        ensure_version_token_matches(form, text)
         text.content = form.content.data
         db.session.commit()
         flash("Zapisano korekty wariantu tekstu.", "success")
