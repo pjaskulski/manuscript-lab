@@ -24,6 +24,38 @@ Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem do
 - Python 3.11+
 - SQLite
 
+## Zrzuty ekranu
+
+![screeenshot](doc/01.png)
+
+![screeenshot](doc/02.png)
+
+![screeenshot](doc/03.png)
+
+![screeenshot](doc/04.png)
+
+![screeenshot](doc/05.png)
+
+![screeenshot](doc/06.png)
+
+![screeenshot](doc/07.png)
+
+![screeenshot](doc/08.png)
+
+![screeenshot](doc/09.png)
+
+![screeenshot](doc/10.png)
+
+![screeenshot](doc/11.png)
+
+![screeenshot](doc/12.png)
+
+![screeenshot](doc/13.png)
+
+![screeenshot](doc/14.png)
+
+![screeenshot](doc/15.png)
+
 ## Instalacja
 
 ```bash
