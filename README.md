@@ -1,4 +1,4 @@
-# Manuscripts Lab — 
+# Manuscripts Lab 
 
 Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem dokumentów.
 
