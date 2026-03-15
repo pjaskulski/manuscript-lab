@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Porównanie tłumaczeń{% endblock %}
+{% block content %}
+<h1>Porównanie tłumaczeń dla dokumentu #{{ document.id }}</h1>
+<form method="post" class="card">
+    {{ form.hidden_tag() }}
+    <div>{{ form.reference_variant_id.label }} {{ form.reference_variant_id() }}</div>
+    <div>{{ form.candidate_variant_id.label }} {{ form.candidate_variant_id() }}</div>
+    <div>{{ form.notes.label }} {{ form.notes() }}</div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}

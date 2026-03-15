@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Dokument {{ document.id }}{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem; row-gap: .75rem;">
+    <div style="margin-right: 1rem;">
+        <h1 style="margin-bottom: .35rem;">Dokument #{{ document.id }}</h1>
+        <div class="muted" style="font-size: 1.25rem; font-weight: 600; line-height: 1.35;">{{ document.title }}</div>
+    </div>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('documents.edit_document', document_id=document.id, next=url_for('documents.document_detail', document_id=document.id)) }}">Edytuj metadane</a>
+        <a class="btn" href="{{ url_for('documents.link_scans', document_id=document.id) }}">Powiąż skan</a>
+        <a class="btn" href="{{ url_for('translations.new_variant', document_id=document.id) }}">Dodaj wariant tłumaczenia</a>
+        <a class="btn btn-primary" href="{{ url_for('translations.compare_variants', document_id=document.id) }}">Porównaj tłumaczenia</a>
+    </div>
+</div>
+<div class="grid grid-2">
+    <div class="card">
+        <h2>Metadane</h2>
+        <dl class="meta-list">
+            <dt>Sygnatura źródła</dt>
+            <dd>{{ document.document_code or '-' }}</dd>
+            <dt>Gotowe</dt>
+            <dd><span class="status-pill {{ 'yes' if document.is_done else 'no' }}">{{ 'Tak' if document.is_done else 'Nie' }}</span></dd>
+        </dl>
+        <div class="meta-note">
+            <span class="meta-note-title">Uwagi</span>
+            <div class="meta-note-body">{{ document.notes or '-' }}</div>
+        </div>
+    </div>
+    <div class="card">
+        <h2>Operacje</h2>
+        <form method="post" action="{{ url_for('documents.rebuild_original_text', document_id=document.id) }}" style="margin-bottom: .8rem;">
+            <button class="btn" type="submit">Przebuduj tekst źródłowy ze skanów</button>
+        </form>
+        <form method="post" action="{{ url_for('documents.delete_document', document_id=document.id) }}" onsubmit="return confirm('Usunąć dokument?');">
+            <button class="btn btn-danger" type="submit">Usuń dokument</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Powiązane skany</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Kolejność</th>
+                <th>Skan</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.ordering }}</td>
+                <td><a href="{{ url_for('scans.scan_detail', scan_id=link.scan.id) }}">#{{ link.scan.id }} — {{ link.scan.title }}</a></td>
+                <td>
+                    <div class="actions">
+                        <a class="btn" href="{{ url_for('documents.edit_link', link_id=link.id) }}">Edytuj</a>
+                        <form method="post" action="{{ url_for('documents.delete_link', link_id=link.id) }}" onsubmit="return confirm('Usunąć powiązanie?');">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3">Brak powiązanych skanów.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Tekst źródłowy</h2>
+    <div class="mono text-panel scroll-panel">{{ document.original_text or '' }}</div>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Warianty tłumaczeń</h2>
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='id', variant_sort_dir='desc' if variant_sort_by == 'id' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if variant_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='variant_type', variant_sort_dir='desc' if variant_sort_by == 'variant_type' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if variant_sort_by == 'variant_type' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='source_model', variant_sort_dir='desc' if variant_sort_by == 'source_model' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if variant_sort_by == 'source_model' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='notes', variant_sort_dir='desc' if variant_sort_by == 'notes' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if variant_sort_by == 'notes' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for variant in variants %}
+            <tr>
+                <td>{{ variant.id }}</td>
+                <td>{{ variant.variant_type }}</td>
+                <td>{{ variant.source_display or '-' }}</td>
+                <td>{{ variant.label or '-' }}</td>
+                <td>
+                    <div class="actions">
+                        <a class="btn" href="{{ url_for('translations.edit_variant', variant_id=variant.id) }}">Edytuj</a>
+                        <form method="post" action="{{ url_for('translations.delete_variant', variant_id=variant.id) }}" onsubmit="return confirm('Usunąć wariant?');">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5"><div class="mono text-panel small">{{ variant.content[:1200] }}{% if variant.content|length > 1200 %}…{% endif %}</div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">Brak wariantów tłumaczeń.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Porównania tłumaczeń</h2>
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='reference', comparison_sort_dir='desc' if comparison_sort_by == 'reference' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Wzorzec{% if comparison_sort_by == 'reference' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='candidate', comparison_sort_dir='desc' if comparison_sort_by == 'candidate' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Porównywany{% if comparison_sort_by == 'candidate' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='bleu', comparison_sort_dir='desc' if comparison_sort_by == 'bleu' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">BLEU{% if comparison_sort_by == 'bleu' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='chrf', comparison_sort_dir='desc' if comparison_sort_by == 'chrf' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">chrF++{% if comparison_sort_by == 'chrf' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cmp in comparisons %}
+            <tr>
+                <td>{{ cmp.id }}</td>
+                <td>{{ cmp.reference_variant.source_display or cmp.reference_variant.variant_type }}</td>
+                <td>{{ cmp.candidate_variant.source_display or cmp.candidate_variant.variant_type }}</td>
+                <td>{{ '%.4f'|format(cmp.bleu or 0) }}</td>
+                <td>{{ '%.4f'|format(cmp.chrf or 0) }}</td>
+                <td><a class="btn" href="{{ url_for('translations.view_comparison', comparison_id=cmp.id) }}">Szczegóły</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">Brak porównań.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

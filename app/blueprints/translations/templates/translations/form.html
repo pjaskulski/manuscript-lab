@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="muted">Dokument: <a href="{{ url_for('documents.document_detail', document_id=document.id) }}">#{{ document.id }} — {{ document.title }}</a></p>
+<form method="post" class="card">
+    {{ form.hidden_tag() }}
+    <div>{{ form.variant_type.label }} {{ form.variant_type() }}</div>
+    <div>{{ form.source_model.label }} {{ form.source_model() }}</div>
+    <div>{{ form.label.label }} {{ form.label() }}</div>
+    <div>{{ form.content.label }} {{ form.content() }}</div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}

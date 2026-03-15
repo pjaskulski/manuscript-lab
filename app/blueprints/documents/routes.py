@@ -1,0 +1,270 @@
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+
+from ...extensions import db
+from ...models import Document, DocumentScanLink, Scan, ScanText, TranslationComparison, TranslationVariant
+from ...services.bleu_metrics import compute_bleu, compute_chrf
+from ...services.document_builder import build_document_text_from_scan_texts
+from .forms import DocumentForm, LinkScanForm
+
+documents_bp = Blueprint("documents", __name__, template_folder="templates")
+
+DOCUMENT_SORT_FIELDS = {
+    "id": lambda direction: (Document.id.asc(),) if direction == "asc" else (Document.id.desc(),),
+    "title": lambda direction: (
+        (Document.title.asc(), Document.id.asc()) if direction == "asc" else (Document.title.desc(), Document.id.asc())
+    ),
+    "document_code": lambda direction: (
+        (Document.document_code.asc().nullslast(), Document.id.asc())
+        if direction == "asc"
+        else (Document.document_code.desc().nullslast(), Document.id.asc())
+    ),
+}
+
+DOCUMENT_VARIANT_SORT_FIELDS = {
+    "id": lambda direction: (TranslationVariant.id.asc(),) if direction == "asc" else (TranslationVariant.id.desc(),),
+    "variant_type": lambda direction: (
+        (TranslationVariant.variant_type.asc(), TranslationVariant.id.asc())
+        if direction == "asc"
+        else (TranslationVariant.variant_type.desc(), TranslationVariant.id.asc())
+    ),
+    "source_model": lambda direction: (
+        (TranslationVariant.source_model.asc().nullslast(), TranslationVariant.id.asc())
+        if direction == "asc"
+        else (TranslationVariant.source_model.desc().nullslast(), TranslationVariant.id.asc())
+    ),
+    "notes": lambda direction: (
+        (TranslationVariant.label.asc().nullslast(), TranslationVariant.id.asc())
+        if direction == "asc"
+        else (TranslationVariant.label.desc().nullslast(), TranslationVariant.id.asc())
+    ),
+}
+
+DOCUMENT_COMPARISON_SORT_FIELDS = {
+    "id": lambda direction: (TranslationComparison.id.asc(),) if direction == "asc" else (TranslationComparison.id.desc(),),
+    "reference": lambda direction: (
+        (TranslationComparison.reference_variant_id.asc(), TranslationComparison.id.asc())
+        if direction == "asc"
+        else (TranslationComparison.reference_variant_id.desc(), TranslationComparison.id.asc())
+    ),
+    "candidate": lambda direction: (
+        (TranslationComparison.candidate_variant_id.asc(), TranslationComparison.id.asc())
+        if direction == "asc"
+        else (TranslationComparison.candidate_variant_id.desc(), TranslationComparison.id.asc())
+    ),
+    "bleu": lambda direction: (
+        (TranslationComparison.bleu.asc().nullslast(), TranslationComparison.id.asc())
+        if direction == "asc"
+        else (TranslationComparison.bleu.desc().nullslast(), TranslationComparison.id.asc())
+    ),
+    "chrf": lambda direction: (
+        (TranslationComparison.chrf.asc().nullslast(), TranslationComparison.id.asc())
+        if direction == "asc"
+        else (TranslationComparison.chrf.desc().nullslast(), TranslationComparison.id.asc())
+    ),
+}
+
+@documents_bp.route("/")
+def list_documents():
+    q = request.args.get("q", "").strip()
+    sort_by = request.args.get("sort_by", "id")
+    sort_dir = request.args.get("sort_dir", "asc")
+    if sort_by not in DOCUMENT_SORT_FIELDS:
+        sort_by = "id"
+    if sort_dir not in {"asc", "desc"}:
+        sort_dir = "asc"
+    query = Document.query
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(Document.title.ilike(like), Document.document_code.ilike(like)))
+    documents = query.order_by(*DOCUMENT_SORT_FIELDS[sort_by](sort_dir)).all()
+    return render_template("documents/list.html", documents=documents, q=q, sort_by=sort_by, sort_dir=sort_dir)
+
+
+@documents_bp.route("/new", methods=["GET", "POST"])
+def new_document():
+    form = DocumentForm()
+    cancel_url = url_for("documents.list_documents")
+    if form.validate_on_submit():
+        document = Document(
+            title=form.title.data,
+            document_code=form.document_code.data or None,
+            notes=form.notes.data,
+            original_text=form.original_text.data,
+        )
+        db.session.add(document)
+        db.session.commit()
+        flash("Dodano dokument.", "success")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+    return render_template("documents/form.html", form=form, title="Nowy dokument", cancel_url=cancel_url)
+
+
+@documents_bp.route("/<int:document_id>")
+def document_detail(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    variant_sort_by = request.args.get("variant_sort_by", "id")
+    variant_sort_dir = request.args.get("variant_sort_dir", "asc")
+    comparison_sort_by = request.args.get("comparison_sort_by", "id")
+    comparison_sort_dir = request.args.get("comparison_sort_dir", "asc")
+
+    if variant_sort_by not in DOCUMENT_VARIANT_SORT_FIELDS:
+        variant_sort_by = "id"
+    if variant_sort_dir not in {"asc", "desc"}:
+        variant_sort_dir = "asc"
+    if comparison_sort_by not in DOCUMENT_COMPARISON_SORT_FIELDS:
+        comparison_sort_by = "id"
+    if comparison_sort_dir not in {"asc", "desc"}:
+        comparison_sort_dir = "asc"
+
+    comparisons_to_update = document.comparisons.filter(
+        db.or_(TranslationComparison.bleu.is_(None), TranslationComparison.chrf.is_(None))
+    ).all()
+    if comparisons_to_update:
+        for comparison in comparisons_to_update:
+            if comparison.bleu is None:
+                comparison.bleu = compute_bleu(
+                    comparison.reference_variant.content,
+                    comparison.candidate_variant.content,
+                )
+            if comparison.chrf is None:
+                comparison.chrf = compute_chrf(
+                    comparison.reference_variant.content,
+                    comparison.candidate_variant.content,
+                )
+        db.session.commit()
+
+    links = document.scan_links.order_by(DocumentScanLink.ordering.asc()).all()
+    variants = document.translation_variants.order_by(*DOCUMENT_VARIANT_SORT_FIELDS[variant_sort_by](variant_sort_dir)).all()
+    comparisons = document.comparisons.order_by(
+        *DOCUMENT_COMPARISON_SORT_FIELDS[comparison_sort_by](comparison_sort_dir)
+    ).all()
+    return render_template(
+        "documents/detail.html",
+        document=document,
+        links=links,
+        variants=variants,
+        comparisons=comparisons,
+        variant_sort_by=variant_sort_by,
+        variant_sort_dir=variant_sort_dir,
+        comparison_sort_by=comparison_sort_by,
+        comparison_sort_dir=comparison_sort_dir,
+    )
+
+
+@documents_bp.route("/<int:document_id>/edit", methods=["GET", "POST"])
+def edit_document(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    form = DocumentForm(obj=document)
+    cancel_url = request.args.get("next") or url_for("documents.document_detail", document_id=document.id)
+    if form.validate_on_submit():
+        form.populate_obj(document)
+        if not document.document_code:
+            document.document_code = None
+        db.session.commit()
+        flash("Zapisano dokument.", "success")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+    return render_template("documents/form.html", form=form, title="Edycja dokumentu", cancel_url=cancel_url)
+
+
+@documents_bp.route("/<int:document_id>/delete", methods=["POST"])
+def delete_document(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    db.session.delete(document)
+    db.session.commit()
+    flash("Usunięto dokument.", "success")
+    return redirect(url_for("documents.list_documents"))
+
+
+@documents_bp.route("/<int:document_id>/link-scans", methods=["GET", "POST"])
+def link_scans(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    linked_scan_ids = [link.scan_id for link in document.scan_links.all()]
+    available_scans = Scan.query.filter(~Scan.id.in_(linked_scan_ids) if linked_scan_ids else True).order_by(Scan.id.asc()).all()
+    cancel_url = url_for("documents.document_detail", document_id=document.id)
+
+    form = LinkScanForm()
+    form.scan_id.choices = [(scan.id, f"{scan.id} | {scan.title} | {scan.folio or '-'}") for scan in available_scans]
+
+    if request.method == "POST" and not form.scan_id.choices:
+        flash("Brak wolnych skanów do powiązania.", "warning")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    if form.validate_on_submit():
+        link = DocumentScanLink(
+            document=document,
+            scan_id=form.scan_id.data,
+            ordering=form.ordering.data,
+        )
+        db.session.add(link)
+        db.session.commit()
+        flash("Powiązano skan z dokumentem.", "success")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    return render_template(
+        "documents/link_scans.html",
+        document=document,
+        form=form,
+        cancel_url=cancel_url,
+        title="Powiąż skan z dokumentem",
+    )
+
+
+@documents_bp.route("/links/<int:link_id>/edit", methods=["GET", "POST"])
+def edit_link(link_id: int):
+    link = DocumentScanLink.query.get_or_404(link_id)
+    document = link.document
+    cancel_url = url_for("documents.document_detail", document_id=document.id)
+
+    linked_scan_ids = [item.scan_id for item in document.scan_links.filter(DocumentScanLink.id != link.id).all()]
+    available_scans = Scan.query.filter(~Scan.id.in_(linked_scan_ids) if linked_scan_ids else True).order_by(Scan.id.asc()).all()
+
+    form = LinkScanForm(obj=link)
+    form.scan_id.choices = [(scan.id, f"{scan.id} | {scan.title} | {scan.folio or '-'}") for scan in available_scans]
+
+    if form.validate_on_submit():
+        link.scan_id = form.scan_id.data
+        link.ordering = form.ordering.data
+        db.session.commit()
+        flash("Zapisano powiązanie skanu z dokumentem.", "success")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    return render_template(
+        "documents/link_scans.html",
+        document=document,
+        form=form,
+        cancel_url=cancel_url,
+        title="Edycja powiązania skanu z dokumentem",
+    )
+
+
+@documents_bp.route("/links/<int:link_id>/delete", methods=["POST"])
+def delete_link(link_id: int):
+    link = DocumentScanLink.query.get_or_404(link_id)
+    document_id = link.document_id
+    db.session.delete(link)
+    db.session.commit()
+    flash("Usunięto powiązanie skanu z dokumentem.", "success")
+    return redirect(url_for("documents.document_detail", document_id=document_id))
+
+
+@documents_bp.route("/<int:document_id>/rebuild-original-text", methods=["POST"])
+def rebuild_original_text(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    texts = []
+    for link in document.scan_links.order_by(DocumentScanLink.ordering.asc()).all():
+        preferred = (
+            ScanText.query.filter_by(scan_id=link.scan_id, text_type="htr_expanded")
+            .order_by(ScanText.updated_at.desc())
+            .first()
+        )
+        fallback = (
+            ScanText.query.filter_by(scan_id=link.scan_id, text_type="ground_truth")
+            .order_by(ScanText.updated_at.desc())
+            .first()
+        )
+        chosen = preferred or fallback
+        if chosen:
+            texts.append(chosen.content)
+    document.original_text = build_document_text_from_scan_texts(texts)
+    db.session.commit()
+    flash("Przebudowano tekst źródłowy dokumentu.", "success")
+    return redirect(url_for("documents.document_detail", document_id=document.id))

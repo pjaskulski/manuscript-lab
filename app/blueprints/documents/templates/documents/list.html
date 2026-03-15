@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Dokumenty{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <h1>Dokumenty</h1>
+    <a class="btn btn-primary" href="{{ url_for('documents.new_document') }}">Dodaj dokument</a>
+</div>
+<form method="get" class="card" style="margin-bottom: 1rem;">
+    <div>
+        <label for="q">Filtrowanie</label>
+        <input type="text" id="q" name="q" value="{{ q }}" placeholder="tytuł lub kod dokumentu">
+    </div>
+    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+    <div class="actions">
+        <button class="btn" type="submit">Filtruj</button>
+        {% if q %}
+        <a class="btn" href="{{ url_for('documents.list_documents', sort_by=sort_by, sort_dir=sort_dir) }}">Wyczyść</a>
+        {% endif %}
+    </div>
+</form>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('documents.list_documents', q=q, sort_by='id', sort_dir='desc' if sort_by == 'id' and sort_dir == 'asc' else 'asc') }}">ID{% if sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.list_documents', q=q, sort_by='title', sort_dir='desc' if sort_by == 'title' and sort_dir == 'asc' else 'asc') }}">Tytuł{% if sort_by == 'title' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.list_documents', q=q, sort_by='document_code', sort_dir='desc' if sort_by == 'document_code' and sort_dir == 'asc' else 'asc') }}">Sygnatura źródła{% if sort_by == 'document_code' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Gotowe</th>
+                <th>Skany</th>
+                <th>Warianty tłumaczeń</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for document in documents %}
+            <tr>
+                <td>{{ document.id }}</td>
+                <td>{{ document.title }}</td>
+                <td>{{ document.document_code or '-' }}</td>
+                <td><span class="status-pill {{ 'yes' if document.is_done else 'no' }}">{{ 'Tak' if document.is_done else 'Nie' }}</span></td>
+                <td>{{ document.scan_links.count() }}</td>
+                <td>{{ document.translation_variants.count() }}</td>
+                <td>
+                    <div class="actions">
+                        <a class="btn" href="{{ url_for('documents.document_detail', document_id=document.id) }}">Podgląd</a>
+                        <a class="btn" href="{{ url_for('documents.edit_document', document_id=document.id, next=url_for('documents.list_documents', q=q, sort_by=sort_by, sort_dir=sort_dir)) }}">Edytuj metadane</a>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">Brak dokumentów.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

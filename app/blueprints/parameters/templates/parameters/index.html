@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Parametry{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <h1>Parametry</h1>
+    <p class="muted">Słowniki modeli używanych w module skanów i dokumentów.</p>
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="actions" style="justify-content: space-between;">
+            <h2>{{ groups[htr_scope].label }}</h2>
+            <a class="btn btn-primary" href="{{ url_for('parameters.new_model', scope=htr_scope) }}">Dodaj model</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir='desc' if groups[htr_scope].sort_dir == 'asc' else 'asc', translation_sort_dir=groups[translation_scope].sort_dir) }}">Model{% if groups[htr_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[htr_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in groups[htr_scope].entries %}
+                <tr>
+                    <td>{{ entry.name }}</td>
+                    <td>
+                        <div class="actions">
+                            <a class="btn" href="{{ url_for('parameters.edit_model', model_id=entry.id) }}">Edytuj</a>
+                            <form method="post" action="{{ url_for('parameters.delete_model', model_id=entry.id) }}" onsubmit="return confirm('Usunąć model ze słownika?');">
+                                <button class="btn btn-danger" type="submit" {% if entry.name == manual_model_name %}disabled{% endif %}>Usuń</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="2">Brak modeli.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="actions" style="justify-content: space-between;">
+            <h2>{{ groups[translation_scope].label }}</h2>
+            <a class="btn btn-primary" href="{{ url_for('parameters.new_model', scope=translation_scope) }}">Dodaj model</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir=groups[htr_scope].sort_dir, translation_sort_dir='desc' if groups[translation_scope].sort_dir == 'asc' else 'asc') }}">Model{% if groups[translation_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[translation_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in groups[translation_scope].entries %}
+                <tr>
+                    <td>{{ entry.name }}</td>
+                    <td>
+                        <div class="actions">
+                            <a class="btn" href="{{ url_for('parameters.edit_model', model_id=entry.id) }}">Edytuj</a>
+                            <form method="post" action="{{ url_for('parameters.delete_model', model_id=entry.id) }}" onsubmit="return confirm('Usunąć model ze słownika?');">
+                                <button class="btn btn-danger" type="submit" {% if entry.name == manual_model_name %}disabled{% endif %}>Usuń</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="2">Brak modeli.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Start | Manuscripts Lab{% endblock %}
+{% block content %}
+<h1>Manuscripts Lab</h1>
+<p class="muted">Prototyp aplikacji do badań nad HTR i tłumaczeniami.</p>
+<div class="grid grid-2">
+    <div class="card">
+        <h2>Skany</h2>
+        <p>Liczba rekordów: <strong>{{ scans_count }}</strong></p>
+        <p>Moduł do pracy z obrazami manuskryptu, wariantami odczytu HTR i metrykami CER/WER.</p>
+        <a class="btn btn-primary" href="{{ url_for('scans.list_scans') }}">Przejdź do skanów</a>
+    </div>
+    <div class="card">
+        <h2>Dokumenty</h2>
+        <p>Liczba rekordów: <strong>{{ documents_count }}</strong></p>
+        <p>Moduł do budowy dokumentów ze skanów oraz obsługi wariantów tłumaczeń i obliczania metryk BLEU/chrF++.</p>
+        <a class="btn btn-primary" href="{{ url_for('documents.list_documents') }}">Przejdź do dokumentów</a>
+    </div>
+</div>
+{% endblock %}

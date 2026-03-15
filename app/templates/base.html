@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Manuscripts Lab{% endblock %}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #1f2937; }
+        header { background: #1f3a5f; color: white; padding: 1rem 1.5rem; }
+        nav a { color: white; margin-right: 1rem; text-decoration: none; font-weight: 600; }
+        main { max-width: 1200px; margin: 1.5rem auto; background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        .grid { display: grid; gap: 1rem; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: .6rem; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+        .btn, button { display: inline-block; padding: .5rem .8rem; border: 1px solid #d1d5db; border-radius: 6px; text-decoration: none; background: #f9fafb; color: #111827; cursor: pointer; line-height: 1.2; font: inherit; }
+        .btn-primary { background: #2563eb; color: white; border-color: #2563eb; }
+        .btn-danger { background: #b91c1c; color: white; border-color: #b91c1c; }
+        .actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+        .table-actions { display: flex; flex-direction: column; gap: .4rem; align-items: stretch; min-width: 10rem; }
+        .table-actions .btn, .table-actions button { width: 100%; text-align: center; }
+        .sort-link { color: inherit; text-decoration: none; white-space: nowrap; }
+        .sort-link:hover { text-decoration: underline; }
+        .sort-arrow { color: #2563eb; font-size: .9em; }
+        .flash { padding: .8rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+        .flash.success { background: #dcfce7; }
+        .flash.warning { background: #fef3c7; }
+        .flash.danger { background: #fee2e2; }
+        label { display: block; font-weight: 600; margin-bottom: .3rem; }
+        input[type="text"], input[type="number"], textarea, select { width: 100%; padding: .6rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+        .checkbox-field { display: flex; align-items: center; gap: .55rem; }
+        .checkbox-field label { display: inline; margin: 0; }
+        .checkbox-field input[type="checkbox"] { width: auto; margin: 0; }
+        textarea { min-height: 180px; }
+        form > div { margin-bottom: 1rem; }
+        img { max-width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 6px; }
+        .muted { color: #6b7280; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+        .text-panel { background: #fffdf0; border: 1px solid #f1e7b8; border-radius: 6px; padding: .75rem; }
+        .small { font-size: .92rem; }
+        .htr-diff-table { table-layout: fixed; }
+        .htr-diff-table .diff-col-no { width: 5.5rem; }
+        .htr-diff-table .diff-col-text { width: calc((100% - 11rem) / 2); }
+        .htr-diff-table th { background: #f8fafc; }
+        .htr-diff-table .diff-line-no { color: #6b7280; white-space: nowrap; }
+        .htr-diff-table .diff-line-text { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .htr-diff-table .diff-row-change { background: #fffdf0; }
+        .htr-diff-table .diff-row-insert { background: #f0fdf4; }
+        .htr-diff-table .diff-row-delete { background: #fef2f2; }
+        .diff-ref-change { background: #fee2e2; color: #991b1b; border-radius: 3px; padding: 0 .08rem; }
+        .diff-cand-change { background: #dcfce7; color: #166534; border-radius: 3px; padding: 0 .08rem; }
+        .diff-empty { color: #9ca3af; font-style: italic; }
+        .meta-list { display: grid; grid-template-columns: 10rem minmax(0, 1fr); gap: .8rem 1rem; margin: 0; }
+        .meta-list dt { margin: 0; font-weight: 700; color: #475569; }
+        .meta-list dd { margin: 0; min-width: 0; }
+        .meta-note { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; }
+        .meta-note-title { display: block; margin-bottom: .45rem; font-weight: 700; color: #475569; }
+        .meta-note-body { white-space: pre-wrap; }
+        .file-name { overflow-wrap: anywhere; word-break: break-word; }
+        .scroll-panel { max-height: 24rem; overflow: auto; padding-right: .4rem; }
+        .status-pill { display: inline-flex; align-items: center; padding: .2rem .55rem; border-radius: 999px; font-size: .88rem; font-weight: 700; }
+        .status-pill.yes { background: #dcfce7; color: #166534; }
+        .status-pill.no { background: #e5e7eb; color: #475569; }
+        .primary-marker { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; margin-left: .35rem; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: .82rem; font-weight: 700; vertical-align: middle; }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+<header>
+    <nav>
+        <a href="{{ url_for('main.index') }}">Start</a>
+        <a href="{{ url_for('scans.list_scans') }}">Skany</a>
+        <a href="{{ url_for('documents.list_documents') }}">Dokumenty</a>
+        <a href="{{ url_for('parameters.index') }}">Parametry</a>
+        <a href="{{ url_for('translations.corpus_report') }}">Raport korpusu</a>
+    </nav>
+</header>
+<main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

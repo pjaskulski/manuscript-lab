@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post" enctype="multipart/form-data" class="card">
+    {{ form.hidden_tag() }}
+    {% if scan and scan.image_path %}
+    {% set current_filename = scan.image_path.rsplit('/', 1)[-1] %}
+    {% set display_filename = current_filename.split('_', 1)[1] if '_' in current_filename and current_filename.split('_', 1)[0]|length == 32 else current_filename %}
+    {% endif %}
+    <div>{{ form.title.label }} {{ form.title() }}</div>
+    <div>{{ form.shelfmark.label }} {{ form.shelfmark() }}</div>
+    <div>{{ form.folio.label }} {{ form.folio() }}</div>
+    <div>{{ form.sequence_no.label }} {{ form.sequence_no() }}</div>
+    <div>{{ form.hand.label }} {{ form.hand() }}</div>
+    <div>{{ form.notes.label }} {{ form.notes() }}</div>
+    <div class="checkbox-field">{{ form.is_training_sample() }} {{ form.is_training_sample.label }}</div>
+    <div class="checkbox-field">{{ form.is_done() }} {{ form.is_done.label }}</div>
+    <div>
+        {{ form.image_file.label }} {{ form.image_file() }}
+        {% if scan and scan.image_path %}
+        <p class="muted small">Aktualny plik: <span class="mono file-name">{{ display_filename }}</span></p>
+        {% endif %}
+    </div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Porównanie HTR {{ comparison.id }}{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <h1>Porównanie HTR #{{ comparison.id }}</h1>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=comparison.scan.id) }}">Wróć do skanu</a>
+        <form method="post" action="{{ url_for('htr.delete_comparison', comparison_id=comparison.id) }}" onsubmit="return confirm('Usunąć porównanie HTR?');">
+            <button class="btn btn-danger" type="submit">Usuń porównanie</button>
+        </form>
+    </div>
+</div>
+<p><strong>Skan:</strong> <a href="{{ url_for('scans.scan_detail', scan_id=comparison.scan.id) }}">#{{ comparison.scan.id }} — {{ comparison.scan.title }}</a></p>
+<div class="grid grid-2">
+    <div class="card">
+        <h2>Metryki</h2>
+        <p><strong>CER:</strong> {{ '%.2f'|format((comparison.cer or 0) * 100) }}%</p>
+        <p><strong>WER:</strong> {{ '%.2f'|format((comparison.wer or 0) * 100) }}%</p>
+        <p><strong>Profil normalizacji:</strong> {{ comparison.normalization_profile }}</p>
+    </div>
+    <div class="card">
+        <h2>Źródła</h2>
+        <p><strong>Wzorzec:</strong> {{ comparison.reference_text.comparison_display }}</p>
+        <p><strong>Porównywany:</strong> {{ comparison.candidate_text.comparison_display }}</p>
+    </div>
+</div>
+<div class="card" style="margin-top: 1rem; overflow-x: auto;">
+    {{ diff_html|safe }}
+</div>
+{% endblock %}

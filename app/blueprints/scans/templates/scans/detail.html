@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Skan {{ scan.id }}{% endblock %}
+{% block content %}
+{% if scan.image_path %}
+{% set scan_filename = scan.image_path.rsplit('/', 1)[-1] %}
+{% set display_scan_filename = scan_filename.split('_', 1)[1] if '_' in scan_filename and scan_filename.split('_', 1)[0]|length == 32 else scan_filename %}
+{% endif %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <h1>Skan #{{ scan.id }} — {{ scan.title }}</h1>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.scan_detail', scan_id=scan.id)) }}">Edytuj metadane</a>
+        <a class="btn btn-primary" href="{{ url_for('htr.new_scan_text', scan_id=scan.id) }}">Dodaj tekst</a>
+        <a class="btn" href="{{ url_for('htr.compare_scan_texts', scan_id=scan.id) }}">Porównaj HTR</a>
+    </div>
+</div>
+<div class="grid grid-2">
+    <div class="card">
+        <h2>Obraz</h2>
+        {% if scan.image_path %}
+            <img src="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" alt="scan image">
+            <p class="muted small">{{ scan.image_width or '?' }} × {{ scan.image_height or '?' }} px</p>
+            <div class="actions">
+                <a class="btn" href="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" download="{{ display_scan_filename }}">Pobierz</a>
+            </div>
+        {% else %}
+            <p class="muted">Brak obrazu.</p>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h2>Metadane</h2>
+        <dl class="meta-list">
+            <dt>Sygnatura</dt>
+            <dd>{{ scan.shelfmark or '-' }}</dd>
+            <dt>Folio</dt>
+            <dd>{{ scan.folio or '-' }}</dd>
+            <dt>Kolejność</dt>
+            <dd>{{ scan.sequence_no or '-' }}</dd>
+            <dt>Ręka</dt>
+            <dd>{{ scan.hand or '-' }}</dd>
+            <dt>Do próbki uczącej</dt>
+            <dd><span class="status-pill {{ 'yes' if scan.is_training_sample else 'no' }}">{{ 'Tak' if scan.is_training_sample else 'Nie' }}</span></dd>
+            <dt>Gotowe</dt>
+            <dd><span class="status-pill {{ 'yes' if scan.is_done else 'no' }}">{{ 'Tak' if scan.is_done else 'Nie' }}</span></dd>
+            <dt>Plik skanu</dt>
+            <dd><span class="mono file-name">{{ display_scan_filename if scan.image_path else '-' }}</span></dd>
+        </dl>
+        <div class="meta-note">
+            <span class="meta-note-title">Uwagi</span>
+            <div class="meta-note-body">{{ scan.notes or '-' }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Warianty tekstu</h2>
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='id', text_sort_dir='desc' if text_sort_by == 'id' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if text_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='text_type', text_sort_dir='desc' if text_sort_by == 'text_type' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if text_sort_by == 'text_type' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='source', text_sort_dir='desc' if text_sort_by == 'source' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if text_sort_by == 'source' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='label', text_sort_dir='desc' if text_sort_by == 'label' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if text_sort_by == 'label' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Poliniowany</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for text in texts %}
+            <tr>
+                <td>{{ text.id }}</td>
+                <td>{{ text.text_type }}{% if text.main_ground_truth %}<span class="primary-marker" title="Podstawowa wersja ground truth">*</span>{% endif %}</td>
+                <td>{{ text.source_display or '-' }}</td>
+                <td>{{ text.label or '-' }}</td>
+                <td><span class="status-pill {{ 'yes' if text.is_line_based else 'no' }}">{{ 'Tak' if text.is_line_based else 'Nie' }}</span></td>
+                <td>
+                    <div class="actions">
+                        <a class="btn" href="{{ url_for('htr.workspace_scan_text', text_id=text.id) }}">HTR</a>
+                        <a class="btn" href="{{ url_for('htr.edit_scan_text', text_id=text.id) }}">Edytuj</a>
+                        <form method="post" action="{{ url_for('htr.delete_scan_text', text_id=text.id) }}" onsubmit="return confirm('Usunąć wariant tekstu?');">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6"><div class="mono text-panel small">{{ text.content[:1200] }}{% if text.content|length > 1200 %}…{% endif %}</div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">Brak wariantów tekstu.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <h2>Porównania HTR</h2>
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc') }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Wzorzec</th>
+                <th>Porównywany</th>
+                <th>Profil</th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='cer', comparison_sort_dir='desc' if comparison_sort_by == 'cer' and comparison_sort_dir == 'asc' else 'asc') }}">CER{% if comparison_sort_by == 'cer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='wer', comparison_sort_dir='desc' if comparison_sort_by == 'wer' and comparison_sort_dir == 'asc' else 'asc') }}">WER{% if comparison_sort_by == 'wer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cmp in comparisons %}
+            <tr>
+                <td>{{ cmp.id }}</td>
+                <td>{{ cmp.reference_text.comparison_display }}</td>
+                <td>{{ cmp.candidate_text.comparison_display }}</td>
+                <td>{{ cmp.normalization_profile or '-' }}</td>
+                <td>{{ '%.2f'|format((cmp.cer or 0) * 100) }}%</td>
+                <td>{{ '%.2f'|format((cmp.wer or 0) * 100) }}%</td>
+                <td><a class="btn" href="{{ url_for('htr.view_comparison', comparison_id=cmp.id) }}">Szczegóły</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">Brak porównań.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="margin-top: 1rem;">
+    <form method="post" action="{{ url_for('scans.delete_scan', scan_id=scan.id) }}" onsubmit="return confirm('Usunąć skan?');">
+        <button class="btn btn-danger" type="submit">Usuń skan</button>
+    </form>
+</div>
+{% endblock %}

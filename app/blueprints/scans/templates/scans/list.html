@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Skany{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <h1>Skany</h1>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('scans.export_training_sample') }}">Eksport próbki uczącej</a>
+        <a class="btn btn-primary" href="{{ url_for('scans.new_scan') }}">Dodaj skan</a>
+    </div>
+</div>
+<form method="get" class="card" style="margin-bottom: 1rem;">
+    <div>
+        <label for="q">Filtrowanie</label>
+        <input type="text" id="q" name="q" value="{{ q }}" placeholder="tytuł, sygnatura, folio, ręka">
+    </div>
+    <input type="hidden" name="sort_by" value="{{ sort_by }}">
+    <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+    <div class="actions">
+        <button class="btn" type="submit">Filtruj</button>
+        {% if q %}
+        <a class="btn" href="{{ url_for('scans.list_scans', sort_by=sort_by, sort_dir=sort_dir) }}">Wyczyść</a>
+        {% endif %}
+    </div>
+</form>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='id', sort_dir='desc' if sort_by == 'id' and sort_dir == 'asc' else 'asc') }}">ID{% if sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='title', sort_dir='desc' if sort_by == 'title' and sort_dir == 'asc' else 'asc') }}">Tytuł{% if sort_by == 'title' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Sygnatura</th>
+                <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='folio', sort_dir='desc' if sort_by == 'folio' and sort_dir == 'asc' else 'asc') }}">Folio{% if sort_by == 'folio' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Ręka</th>
+                <th>Do próbki uczącej</th>
+                <th>Gotowe</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scan in scans %}
+            <tr>
+                <td>{{ scan.id }}</td>
+                <td>{{ scan.title }}</td>
+                <td>{{ scan.shelfmark or "-" }}</td>
+                <td>{{ scan.folio or "-" }}</td>
+                <td>{{ scan.hand or "-" }}</td>
+                <td><span class="status-pill {{ 'yes' if scan.is_training_sample else 'no' }}">{{ "Tak" if scan.is_training_sample else "Nie" }}</span></td>
+                <td><span class="status-pill {{ 'yes' if scan.is_done else 'no' }}">{{ "Tak" if scan.is_done else "Nie" }}</span></td>
+                <td>
+                    <div class="table-actions">
+                        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=scan.id) }}">Podgląd</a>
+                        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.list_scans')) }}">Edytuj metadane</a>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8">Brak rekordów.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block head %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.getElementById("training-export-form");
+    const submitButton = document.getElementById("training-export-submit");
+
+    if (!form || !submitButton) {
+        return;
+    }
+
+    form.addEventListener("submit", function () {
+        submitButton.disabled = true;
+        submitButton.textContent = "Przygotowywanie paczki...";
+    });
+});
+</script>
+{% endblock %}
+{% block title %}Eksport próbki uczącej{% endblock %}
+{% block content %}
+<h1>Eksport próbki uczącej</h1>
+<p class="muted">Eksport obejmuje tylko skany oznaczone jako Do próbki uczącej, które mają wskazaną podstawową wersję ground truth.</p>
+<div class="card" style="margin-bottom: 1rem;">
+    <p><strong>Liczba skanów gotowych do eksportu:</strong> {{ candidate_count }}</p>
+    <p class="muted">Przygotowanie paczki ZIP może potrwać chwilę, szczególnie przy dołączaniu obrazów.</p>
+</div>
+<form method="post" class="card" id="training-export-form">
+    {{ form.hidden_tag() }}
+    <div class="checkbox-field">{{ form.include_images() }} {{ form.include_images.label }}</div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary", id="training-export-submit") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}

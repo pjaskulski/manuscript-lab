@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}
+<style>
+    .document-notes-field {
+        min-height: 0;
+    }
+
+    .document-original-text-field {
+        min-height: 18rem;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post" class="card">
+    {{ form.hidden_tag() }}
+    <div>{{ form.title.label }} {{ form.title() }}</div>
+    <div>{{ form.document_code.label }} {{ form.document_code() }}</div>
+    <div>{{ form.notes.label }} {{ form.notes(rows=2, class_="document-notes-field") }}</div>
+    <div class="checkbox-field">{{ form.is_done() }} {{ form.is_done.label }}</div>
+    <div>{{ form.original_text.label }} {{ form.original_text(rows=12, class_="document-original-text-field") }}</div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}

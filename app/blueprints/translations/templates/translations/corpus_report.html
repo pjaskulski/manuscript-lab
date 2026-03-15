@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Raport korpusowy tłumaczeń{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem; row-gap: .75rem;">
+    <div>
+        <h1 style="margin-bottom: .35rem;">Raport korpusowy tłumaczeń</h1>
+        <div class="muted">Metryki są liczone ponownie dla całego zbioru zapisanych porównań, a nie jako średnia z dokumentów.</div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <h2>Dostępne grupy porównań</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Wzorzec</th>
+                <th>Porównywany</th>
+                <th>Porównania</th>
+                <th>Dokumenty</th>
+                <th>BLEU korpusowe</th>
+                <th>chrF++ korpusowe</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group.reference_label }}</td>
+                <td>{{ group.candidate_label }}</td>
+                <td>{{ group.comparison_count }}</td>
+                <td>{{ group.document_count }}</td>
+                <td>{{ '%.4f'|format(group.bleu) }}</td>
+                <td>{{ '%.4f'|format(group.chrf) }}</td>
+                <td>
+                    <a class="btn" href="{{ url_for('translations.corpus_report', reference_variant_type=group.reference_variant_type, reference_source_model=group.reference_source_model, candidate_variant_type=group.candidate_variant_type, candidate_source_model=group.candidate_source_model) }}">Skład</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7">Brak zapisanych porównań tłumaczeń do agregacji.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if selected_group %}
+<div class="card" style="margin-top: 1rem;">
+    <h2>Skład korpusu: {{ selected_group.reference_label }} -> {{ selected_group.candidate_label }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID porównania</th>
+                <th>Dokument</th>
+                <th>BLEU dokumentowe</th>
+                <th>chrF++ dokumentowe</th>
+                <th>Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for comparison in selected_group.comparisons %}
+            <tr>
+                <td>{{ comparison.id }}</td>
+                <td><a href="{{ url_for('documents.document_detail', document_id=comparison.document.id) }}">#{{ comparison.document.id }} — {{ comparison.document.title }}</a></td>
+                <td>{{ '%.4f'|format(comparison.bleu or 0) }}</td>
+                <td>{{ '%.4f'|format(comparison.chrf or 0) }}</td>
+                <td><a class="btn" href="{{ url_for('translations.view_comparison', comparison_id=comparison.id) }}">Szczegóły</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const groundTruthTypes = {{ ground_truth_types|tojson }};
+    const textTypeField = document.getElementById("text_type");
+    const mainGroundTruthField = document.getElementById("main_ground_truth");
+
+    if (!textTypeField || !mainGroundTruthField) {
+        return;
+    }
+
+    function syncMainGroundTruthAvailability() {
+        const enabled = groundTruthTypes.includes(textTypeField.value);
+        mainGroundTruthField.disabled = !enabled;
+        if (!enabled) {
+            mainGroundTruthField.checked = false;
+        }
+    }
+
+    textTypeField.addEventListener("change", syncMainGroundTruthAvailability);
+    syncMainGroundTruthAvailability();
+});
+</script>
+{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="muted">Skan: <a href="{{ url_for('scans.scan_detail', scan_id=scan.id) }}">#{{ scan.id }} — {{ scan.title }}</a></p>
+<form method="post" class="card">
+    {{ form.hidden_tag() }}
+    <div>{{ form.text_type.label }} {{ form.text_type() }}</div>
+    <div>{{ form.source_model.label }} {{ form.source_model() }}</div>
+    <div>{{ form.label.label }} {{ form.label() }}</div>
+    <div class="checkbox-field">{{ form.main_ground_truth() }} {{ form.main_ground_truth.label }}</div>
+    <div class="checkbox-field">{{ form.is_line_based() }} {{ form.is_line_based.label }}</div>
+    <div>{{ form.content.label }} {{ form.content() }}</div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}
