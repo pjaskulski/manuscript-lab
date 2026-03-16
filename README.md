@@ -104,9 +104,29 @@ flask --app run.py create-user
 
 Po utworzeniu pierwszego użytkownika logowanie jest dostępne pod `/auth/login`, a pozostałe widoki wymagają zalogowania.
 
+Automatyczne dopasowanie linii w workspace HTR:
+
+```bash
+GEMINI_API_KEY=twoj-klucz-api
+```
+
+Opcjonalnie można też ustawić własny model:
+
+```bash
+GEMINI_ALIGNMENT_MODEL=gemini-3-flash-preview
+```
+
+Po ustawieniu klucza w widoku `HTR` dla wariantu tekstu pojawia się przycisk `Dopasuj linie przez AI`, który bierze obraz skanu i bieżący tekst z edytora, wysyła je do Gemini i wstawia wynik z podziałem na wiersze z powrotem do pola edycji.
+
 Przykładowe pliki wdrożeniowe:
 - `deploy/manuscript-lab.service` - usługa `systemd` dla `gunicorn`,
 - `deploy/manuscript-lab.nginx.conf` - przykładowy vhost `nginx`.
+
+Aplikacja może działać pod prefiksem reverse proxy, np. `/manuscriptlab/`. W takim wariancie `nginx` powinien przekazywać:
+
+```nginx
+proxy_set_header X-Forwarded-Prefix /manuscriptlab;
+```
 
 Przykładowe wdrożenie na serwerze:
 
@@ -122,7 +142,7 @@ sudo systemctl reload nginx
 
 Przed użyciem należy dostosować:
 - `User`, `Group`, `WorkingDirectory`, `PATH` i `ExecStart` w `deploy/manuscript-lab.service`,
-- `server_name` oraz ścieżki `alias` w `deploy/manuscript-lab.nginx.conf`,
+- prefiks URL, `server_name` oraz ścieżki `alias` w `deploy/manuscript-lab.nginx.conf`,
 - wartość `SECRET_KEY` w usłudze `systemd`.
 
 ## Struktura folderów i plików

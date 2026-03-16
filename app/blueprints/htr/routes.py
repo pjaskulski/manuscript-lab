@@ -1,14 +1,16 @@
 import csv
 import io
 from collections import defaultdict
+from pathlib import Path
 
-from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from openpyxl import Workbook
 from sqlalchemy.orm import joinedload
 
 from ...extensions import db
 from ...models import HTRComparison, Scan, ScanText
 from ...services.concurrency import bind_version_token, ensure_version_token_matches
+from ...services.gemini_alignment import GeminiAlignmentError, align_transcription_lines
 from ...services.htr_metrics import compute_corpus_htr_metrics, compute_htr_metrics, make_html_diff
 from ...services.model_registry import MANUAL_MODEL_NAME, MODEL_SCOPE_HTR, get_model_choices
 from ...services.text_normalization import normalize_text
@@ -209,6 +211,34 @@ def workspace_scan_text(text_id: int):
         title="HTR",
         cancel_url=cancel_url,
     )
+
+
+@htr_bp.route("/texts/<int:text_id>/align-lines", methods=["POST"])
+def align_scan_text_lines(text_id: int):
+    text = ScanText.query.get_or_404(text_id)
+    if not text.scan.image_path:
+        return jsonify({"error": "Ten skan nie ma przypisanego obrazu."}), 400
+
+    payload = request.get_json(silent=True) or {}
+    raw_text = (payload.get("text") or "").strip()
+    if not raw_text:
+        return jsonify({"error": "Brak tekstu do dopasowania."}), 400
+
+    image_path = Path(current_app.config["UPLOAD_FOLDER"]) / text.scan.image_path
+    try:
+        formatted_text = align_transcription_lines(
+            api_key=current_app.config.get("GEMINI_API_KEY"),
+            model=current_app.config.get("GEMINI_ALIGNMENT_MODEL", "gemini-3-flash-preview"),
+            image_path=image_path,
+            raw_text=raw_text,
+        )
+    except GeminiAlignmentError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Gemini alignment failed for scan text %s", text_id)
+        return jsonify({"error": "Nie udalo sie przetworzyc tekstu przez Gemini."}), 500
+
+    return jsonify({"formatted_text": formatted_text})
 
 
 @htr_bp.route("/texts/<int:text_id>/delete", methods=["POST"])

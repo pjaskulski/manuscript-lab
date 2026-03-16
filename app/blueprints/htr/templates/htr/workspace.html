@@ -17,18 +17,28 @@
     .workspace-form { display: flex; flex-direction: column; height: 100%; }
     .workspace-text-controls { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: .75rem; flex-wrap: wrap; }
     .workspace-control-group { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-    .workspace-editor { flex: 1; min-height: 58vh; max-height: 68vh; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff; }
+    .workspace-font-controls { display: flex; gap: .75rem; align-items: center; flex-wrap: nowrap; }
+    .workspace-editor { height: 68vh; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff; }
+    .workspace-editor-shell { position: relative; }
     .workspace-source { display: none; }
-    .CodeMirror { height: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; line-height: 1.45; }
+    .CodeMirror { width: 100%; height: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 16px; line-height: 1.45; }
+    .workspace-editor .CodeMirror-scroll { overflow-y: scroll !important; overflow-x: auto !important; max-width: 100%; }
+    .workspace-editor.is-wrapping .CodeMirror-scroll { overflow-x: hidden !important; }
     .CodeMirror-gutters { background: #f8fafc; border-right: 1px solid #e5e7eb; color: #64748b; }
     .workspace-font-slider { width: 12rem; }
     .workspace-actions { display: flex; gap: .5rem; margin-top: 1rem; flex-wrap: wrap; }
     .workspace-status { margin-left: auto; }
     .status-pill.warning { background: #fef3c7; color: #92400e; }
+    .status-pill.busy { background: #dbeafe; color: #1d4ed8; }
+    .workspace-busy-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(248, 250, 252, .82); border: 1px solid #cbd5e1; border-radius: 6px; z-index: 10; }
+    .workspace-busy-overlay.is-visible { display: flex; }
+    .workspace-busy-card { display: flex; flex-direction: column; align-items: center; gap: .65rem; padding: 1rem 1.2rem; border-radius: 10px; background: white; box-shadow: 0 10px 30px rgba(15, 23, 42, .12); color: #0f172a; }
+    .workspace-spinner { width: 2rem; height: 2rem; border-radius: 999px; border: 3px solid #bfdbfe; border-top-color: #2563eb; animation: workspace-spin .9s linear infinite; }
+    @keyframes workspace-spin { to { transform: rotate(360deg); } }
     @media (max-width: 980px) {
         .workspace-layout { grid-template-columns: 1fr; }
         .workspace-stage { min-height: 50vh; }
-        .workspace-editor { min-height: 45vh; }
+        .workspace-editor { height: 45vh; }
     }
 </style>
 {% endblock %}
@@ -78,14 +88,26 @@
                         <span>Zawijanie wierszy</span>
                     </label>
                 </div>
-                <div class="workspace-control-group">
+                <div class="workspace-font-controls">
+                    {% if scan.image_path %}
+                    <button type="button" class="btn" id="align-lines-button">Dopasuj linie przez AI</button>
+                    {% endif %}
                     <label for="font-size-slider">Rozmiar fontu</label>
                     <input class="workspace-font-slider" type="range" id="font-size-slider" min="10" max="28" step="1" value="16">
                     <span class="status-pill no"><span id="font-size-value">16</span> px</span>
                 </div>
             </div>
             {{ form.content(class_="workspace-source", id="workspace-source") }}
-            <div class="workspace-editor" id="workspace-editor"></div>
+            <div class="workspace-editor-shell">
+                <div class="workspace-editor" id="workspace-editor"></div>
+                <div class="workspace-busy-overlay" id="workspace-busy-overlay" aria-live="polite" aria-hidden="true">
+                    <div class="workspace-busy-card">
+                        <div class="workspace-spinner" aria-hidden="true"></div>
+                        <strong>Trwa analiza skanu przez AI</strong>
+                        <span class="muted small">To moze potrwac kilkanascie sekund.</span>
+                    </div>
+                </div>
+            </div>
             <div class="workspace-actions">
                 {{ form.submit(class_="btn btn-primary") }}
                 <a class="btn" href="{{ cancel_url }}" id="workspace-close">Zamknij</a>
@@ -105,32 +127,54 @@
     const wrapToggle = document.getElementById("wrap-toggle");
     const fontSizeSlider = document.getElementById("font-size-slider");
     const fontSizeValue = document.getElementById("font-size-value");
+    const alignLinesButton = document.getElementById("align-lines-button");
+    const busyOverlay = document.getElementById("workspace-busy-overlay");
     if (!textarea || !editorHost || !form || !closeLink || !saveStatus || !wrapToggle || !fontSizeSlider || !fontSizeValue || typeof CodeMirror === "undefined") return;
 
     const initialValue = textarea.value;
     let isSubmitting = false;
+    let isAligning = false;
 
     const editor = CodeMirror(editorHost, {
         value: textarea.value,
         lineNumbers: true,
         lineWrapping: wrapToggle.checked,
-        viewportMargin: Infinity,
     });
+    editor.setSize("100%", "100%");
 
     function hasUnsavedChanges() {
         return editor.getValue() !== initialValue;
     }
 
     function updateSaveStatus() {
+        if (isAligning) {
+            saveStatus.textContent = "Trwa analiza skanu...";
+            saveStatus.classList.remove("no", "warning");
+            saveStatus.classList.add("busy");
+            return;
+        }
         if (hasUnsavedChanges()) {
             saveStatus.textContent = "Niezapisane zmiany";
-            saveStatus.classList.remove("no");
+            saveStatus.classList.remove("no", "busy");
             saveStatus.classList.add("warning");
             return;
         }
         saveStatus.textContent = "Wszystkie zmiany zapisane";
-        saveStatus.classList.remove("warning");
+        saveStatus.classList.remove("warning", "busy");
         saveStatus.classList.add("no");
+    }
+
+    function setBusyState(nextBusy) {
+        isAligning = nextBusy;
+        if (alignLinesButton) {
+            alignLinesButton.disabled = nextBusy;
+        }
+        if (busyOverlay) {
+            busyOverlay.classList.toggle("is-visible", nextBusy);
+            busyOverlay.setAttribute("aria-hidden", nextBusy ? "false" : "true");
+        }
+        editor.refresh();
+        updateSaveStatus();
     }
 
     editor.on("change", (instance) => {
@@ -140,6 +184,7 @@
 
     function updateWrap() {
         editor.setOption("lineWrapping", wrapToggle.checked);
+        editorHost.classList.toggle("is-wrapping", wrapToggle.checked);
         editor.refresh();
     }
 
@@ -152,10 +197,15 @@
 
     wrapToggle.addEventListener("change", updateWrap);
     fontSizeSlider.addEventListener("input", updateFontSize);
+    updateWrap();
     updateFontSize();
     updateSaveStatus();
 
     closeLink.addEventListener("click", (event) => {
+        if (isAligning) {
+            event.preventDefault();
+            return;
+        }
         if (!hasUnsavedChanges()) return;
         if (window.confirm("Masz niezapisane zmiany. Zamknąć widok bez zapisywania?")) return;
         event.preventDefault();
@@ -166,12 +216,48 @@
         textarea.value = editor.getValue();
     });
 
+    window.addEventListener("resize", () => editor.refresh());
+
     window.addEventListener("beforeunload", (event) => {
         if (isSubmitting) return;
+        if (isAligning) return;
         if (!hasUnsavedChanges()) return;
         event.preventDefault();
         event.returnValue = "";
     });
+
+    if (alignLinesButton) {
+        alignLinesButton.addEventListener("click", async () => {
+            const rawText = editor.getValue().trim();
+            if (!rawText) {
+                window.alert("Najpierw wprowadz tekst do dopasowania.");
+                return;
+            }
+
+            setBusyState(true);
+            try {
+                const response = await fetch("{{ url_for('htr.align_scan_text_lines', text_id=text.id) }}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify({ text: editor.getValue() }),
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || "Nie udalo sie dopasowac linii.");
+                }
+                editor.setValue(payload.formatted_text || "");
+                textarea.value = editor.getValue();
+                editor.refresh();
+            } catch (error) {
+                window.alert(error.message || "Nie udalo sie dopasowac linii.");
+            } finally {
+                setBusyState(false);
+            }
+        });
+    }
 
     const stage = document.getElementById("workspace-stage");
     const canvas = document.getElementById("workspace-canvas");
