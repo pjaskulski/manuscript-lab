@@ -59,10 +59,20 @@ SCAN_SORT_FIELDS = {
     "title": lambda direction: (
         (Scan.title.asc(), Scan.id.asc()) if direction == "asc" else (Scan.title.desc(), Scan.id.asc())
     ),
+    "shelfmark": lambda direction: (
+        (Scan.shelfmark.asc().nullslast(), Scan.id.asc())
+        if direction == "asc"
+        else (Scan.shelfmark.desc().nullslast(), Scan.id.asc())
+    ),
     "folio": lambda direction: (
         (Scan.folio.asc().nullslast(), Scan.id.asc())
         if direction == "asc"
         else (Scan.folio.desc().nullslast(), Scan.id.asc())
+    ),
+    "hand": lambda direction: (
+        (Scan.hand.asc().nullslast(), Scan.id.asc())
+        if direction == "asc"
+        else (Scan.hand.desc().nullslast(), Scan.id.asc())
     ),
     "sequence_no": lambda direction: (
         (Scan.sequence_no.asc().nullslast(), Scan.id.asc())

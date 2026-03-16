@@ -1,6 +1,9 @@
+import csv
+import io
 from collections import defaultdict
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
+from openpyxl import Workbook
 from sqlalchemy.orm import joinedload
 
 from ...extensions import db
@@ -16,6 +19,13 @@ from ...services.model_registry import MANUAL_MODEL_NAME, MODEL_SCOPE_TRANSLATIO
 from .forms import TranslationCompareForm, TranslationVariantForm
 
 translations_bp = Blueprint("translations", __name__, template_folder="templates")
+
+TRANSLATION_CORPUS_EXPORT_HEADERS = [
+    "Porownywany",
+    "Liczba dokumentow",
+    "BLEU korpusowe",
+    "chrF++ korpusowe",
+]
 
 
 def _configure_model_choices(form: TranslationVariantForm, current_value: str | None = None) -> None:
@@ -37,6 +47,69 @@ def _comparison_group_key(comparison: TranslationComparison) -> tuple[str, str, 
         comparison.candidate_variant.variant_type or "",
         (comparison.candidate_variant.source_display or "").strip(),
     )
+
+
+def _build_translation_corpus_report_groups() -> list[dict]:
+    comparisons = (
+        TranslationComparison.query.options(
+            joinedload(TranslationComparison.reference_variant),
+            joinedload(TranslationComparison.candidate_variant),
+            joinedload(TranslationComparison.document),
+        )
+        .order_by(TranslationComparison.id.asc())
+        .all()
+    )
+
+    grouped_comparisons: dict[tuple[str, str, str, str], list[TranslationComparison]] = defaultdict(list)
+    for comparison in comparisons:
+        if comparison.reference_variant is None or comparison.candidate_variant is None:
+            continue
+        grouped_comparisons[_comparison_group_key(comparison)].append(comparison)
+
+    groups = []
+    for key, comparison_group in grouped_comparisons.items():
+        first_comparison = comparison_group[0]
+        references = [comparison.reference_variant.content for comparison in comparison_group]
+        candidates = [comparison.candidate_variant.content for comparison in comparison_group]
+        groups.append(
+            {
+                "key": key,
+                "reference_variant_type": key[0],
+                "reference_source_model": key[1],
+                "candidate_variant_type": key[2],
+                "candidate_source_model": key[3],
+                "reference_label": _variant_label(first_comparison.reference_variant),
+                "candidate_label": _variant_label(first_comparison.candidate_variant),
+                "comparison_count": len(comparison_group),
+                "document_count": len({comparison.document_id for comparison in comparison_group}),
+                "bleu": compute_corpus_bleu(references, candidates),
+                "chrf": compute_corpus_chrf(references, candidates),
+                "comparisons": comparison_group,
+            }
+        )
+
+    groups.sort(
+        key=lambda group: (
+            group["reference_label"].lower(),
+            group["candidate_label"].lower(),
+            -group["comparison_count"],
+        )
+    )
+    return groups
+
+
+def _iter_translation_corpus_export_rows(groups: list[dict]) -> list[list]:
+    rows: list[list] = []
+    for group in groups:
+        rows.append(
+            [
+                group["candidate_label"],
+                group["document_count"],
+                round(group["bleu"] or 0, 4),
+                round(group["chrf"] or 0, 4),
+            ]
+        )
+    return rows
 
 
 def _invalidate_variant_comparisons(variant: TranslationVariant) -> None:
@@ -155,51 +228,7 @@ def view_comparison(comparison_id: int):
 
 @translations_bp.route("/corpus-report")
 def corpus_report():
-    comparisons = (
-        TranslationComparison.query.options(
-            joinedload(TranslationComparison.reference_variant),
-            joinedload(TranslationComparison.candidate_variant),
-            joinedload(TranslationComparison.document),
-        )
-        .order_by(TranslationComparison.id.asc())
-        .all()
-    )
-
-    grouped_comparisons: dict[tuple[str, str, str, str], list[TranslationComparison]] = defaultdict(list)
-    for comparison in comparisons:
-        if comparison.reference_variant is None or comparison.candidate_variant is None:
-            continue
-        grouped_comparisons[_comparison_group_key(comparison)].append(comparison)
-
-    groups = []
-    for key, comparison_group in grouped_comparisons.items():
-        first_comparison = comparison_group[0]
-        references = [comparison.reference_variant.content for comparison in comparison_group]
-        candidates = [comparison.candidate_variant.content for comparison in comparison_group]
-        groups.append(
-            {
-                "key": key,
-                "reference_variant_type": key[0],
-                "reference_source_model": key[1],
-                "candidate_variant_type": key[2],
-                "candidate_source_model": key[3],
-                "reference_label": _variant_label(first_comparison.reference_variant),
-                "candidate_label": _variant_label(first_comparison.candidate_variant),
-                "comparison_count": len(comparison_group),
-                "document_count": len({comparison.document_id for comparison in comparison_group}),
-                "bleu": compute_corpus_bleu(references, candidates),
-                "chrf": compute_corpus_chrf(references, candidates),
-                "comparisons": comparison_group,
-            }
-        )
-
-    groups.sort(
-        key=lambda group: (
-            group["reference_label"].lower(),
-            group["candidate_label"].lower(),
-            -group["comparison_count"],
-        )
-    )
+    groups = _build_translation_corpus_report_groups()
 
     selected_key = (
         request.args.get("reference_variant_type", ""),
@@ -217,3 +246,43 @@ def corpus_report():
         groups=groups,
         selected_group=selected_group,
     )
+
+
+@translations_bp.route("/corpus-report/export/<string:file_format>")
+def export_corpus_report(file_format: str):
+    groups = _build_translation_corpus_report_groups()
+    rows = _iter_translation_corpus_export_rows(groups)
+
+    if file_format == "csv":
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(TRANSLATION_CORPUS_EXPORT_HEADERS)
+        writer.writerows(rows)
+        data = io.BytesIO(buffer.getvalue().encode("utf-8-sig"))
+        data.seek(0)
+        return send_file(
+            data,
+            as_attachment=True,
+            download_name="raport_tlumaczen.csv",
+            mimetype="text/csv",
+        )
+
+    if file_format == "xlsx":
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Raport tlumaczen"
+        sheet.append(TRANSLATION_CORPUS_EXPORT_HEADERS)
+        for row in rows:
+            sheet.append(row)
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="raport_tlumaczen.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    flash("Nieobsługiwany format eksportu raportu tłumaczeń.", "warning")
+    return redirect(url_for("translations.corpus_report"))

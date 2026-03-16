@@ -1,6 +1,9 @@
+import csv
+import io
 from collections import defaultdict
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
+from openpyxl import Workbook
 from sqlalchemy.orm import joinedload
 
 from ...extensions import db
@@ -12,6 +15,8 @@ from ...services.text_normalization import normalize_text
 from .forms import GROUND_TRUTH_TEXT_TYPES, HTRCompareForm, ScanTextForm, ScanTextWorkspaceForm
 
 htr_bp = Blueprint("htr", __name__, template_folder="templates")
+
+HTR_CORPUS_EXPORT_HEADERS = ["Model", "Normalizacja", "Liczba Skanow", "CER", "WER"]
 
 
 def _configure_model_choices(form: ScanTextForm, current_value: str | None = None) -> None:
@@ -36,6 +41,74 @@ def _comparison_group_key(comparison: HTRComparison) -> tuple[str, str, str, str
         (comparison.candidate_text.source_display or "").strip(),
         (comparison.normalization_profile or "").strip(),
     )
+
+
+def _build_corpus_report_groups() -> list[dict]:
+    comparisons = (
+        HTRComparison.query.options(
+            joinedload(HTRComparison.reference_text),
+            joinedload(HTRComparison.candidate_text),
+            joinedload(HTRComparison.scan),
+        )
+        .order_by(HTRComparison.id.asc())
+        .all()
+    )
+
+    grouped_comparisons: dict[tuple[str, str, str, str, str], list[HTRComparison]] = defaultdict(list)
+    for comparison in comparisons:
+        if comparison.reference_text is None or comparison.candidate_text is None:
+            continue
+        grouped_comparisons[_comparison_group_key(comparison)].append(comparison)
+
+    groups = []
+    for key, comparison_group in grouped_comparisons.items():
+        first_comparison = comparison_group[0]
+        profile = key[4] or "lowercase"
+        references = [comparison.reference_text.content for comparison in comparison_group]
+        candidates = [comparison.candidate_text.content for comparison in comparison_group]
+        corpus_metrics = compute_corpus_htr_metrics(references, candidates, profile=profile)
+        groups.append(
+            {
+                "key": key,
+                "reference_text_type": key[0],
+                "reference_source_model": key[1],
+                "candidate_text_type": key[2],
+                "candidate_source_model": key[3],
+                "normalization_profile": key[4],
+                "reference_label": _text_label(first_comparison.reference_text),
+                "candidate_label": _text_label(first_comparison.candidate_text),
+                "comparison_count": len(comparison_group),
+                "scan_count": len({comparison.scan_id for comparison in comparison_group}),
+                "cer": corpus_metrics["cer"],
+                "wer": corpus_metrics["wer"],
+                "comparisons": comparison_group,
+            }
+        )
+
+    groups.sort(
+        key=lambda group: (
+            group["reference_label"].lower(),
+            group["candidate_label"].lower(),
+            group["normalization_profile"].lower(),
+            -group["comparison_count"],
+        )
+    )
+    return groups
+
+
+def _iter_corpus_export_rows(groups: list[dict]) -> list[list]:
+    rows: list[list] = []
+    for group in groups:
+        rows.append(
+            [
+                group["candidate_label"],
+                group["normalization_profile"] or "-",
+                group["scan_count"],
+                round((group["cer"] or 0) * 100, 2),
+                round((group["wer"] or 0) * 100, 2),
+            ]
+        )
+    return rows
 
 
 def _sync_main_ground_truth(text: ScanText) -> None:
@@ -203,55 +276,7 @@ def view_comparison(comparison_id: int):
 
 @htr_bp.route("/corpus-report")
 def corpus_report():
-    comparisons = (
-        HTRComparison.query.options(
-            joinedload(HTRComparison.reference_text),
-            joinedload(HTRComparison.candidate_text),
-            joinedload(HTRComparison.scan),
-        )
-        .order_by(HTRComparison.id.asc())
-        .all()
-    )
-
-    grouped_comparisons: dict[tuple[str, str, str, str, str], list[HTRComparison]] = defaultdict(list)
-    for comparison in comparisons:
-        if comparison.reference_text is None or comparison.candidate_text is None:
-            continue
-        grouped_comparisons[_comparison_group_key(comparison)].append(comparison)
-
-    groups = []
-    for key, comparison_group in grouped_comparisons.items():
-        first_comparison = comparison_group[0]
-        profile = key[4] or "lowercase"
-        references = [comparison.reference_text.content for comparison in comparison_group]
-        candidates = [comparison.candidate_text.content for comparison in comparison_group]
-        corpus_metrics = compute_corpus_htr_metrics(references, candidates, profile=profile)
-        groups.append(
-            {
-                "key": key,
-                "reference_text_type": key[0],
-                "reference_source_model": key[1],
-                "candidate_text_type": key[2],
-                "candidate_source_model": key[3],
-                "normalization_profile": key[4],
-                "reference_label": _text_label(first_comparison.reference_text),
-                "candidate_label": _text_label(first_comparison.candidate_text),
-                "comparison_count": len(comparison_group),
-                "scan_count": len({comparison.scan_id for comparison in comparison_group}),
-                "cer": corpus_metrics["cer"],
-                "wer": corpus_metrics["wer"],
-                "comparisons": comparison_group,
-            }
-        )
-
-    groups.sort(
-        key=lambda group: (
-            group["reference_label"].lower(),
-            group["candidate_label"].lower(),
-            group["normalization_profile"].lower(),
-            -group["comparison_count"],
-        )
-    )
+    groups = _build_corpus_report_groups()
 
     selected_key = (
         request.args.get("reference_text_type", ""),
@@ -270,6 +295,46 @@ def corpus_report():
         groups=groups,
         selected_group=selected_group,
     )
+
+
+@htr_bp.route("/corpus-report/export/<string:file_format>")
+def export_corpus_report(file_format: str):
+    groups = _build_corpus_report_groups()
+    rows = _iter_corpus_export_rows(groups)
+
+    if file_format == "csv":
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(HTR_CORPUS_EXPORT_HEADERS)
+        writer.writerows(rows)
+        data = io.BytesIO(buffer.getvalue().encode("utf-8-sig"))
+        data.seek(0)
+        return send_file(
+            data,
+            as_attachment=True,
+            download_name="raport_htr.csv",
+            mimetype="text/csv",
+        )
+
+    if file_format == "xlsx":
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Raport HTR"
+        sheet.append(HTR_CORPUS_EXPORT_HEADERS)
+        for row in rows:
+            sheet.append(row)
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="raport_htr.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    flash("Nieobsługiwany format eksportu raportu HTR.", "warning")
+    return redirect(url_for("htr.corpus_report"))
 
 
 @htr_bp.route("/comparisons/<int:comparison_id>/delete", methods=["POST"])

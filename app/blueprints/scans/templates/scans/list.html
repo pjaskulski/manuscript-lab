@@ -28,9 +28,9 @@
             <tr>
                 <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='id', sort_dir='desc' if sort_by == 'id' and sort_dir == 'asc' else 'asc') }}">ID{% if sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='title', sort_dir='desc' if sort_by == 'title' and sort_dir == 'asc' else 'asc') }}">Tytuł{% if sort_by == 'title' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th>Sygnatura</th>
+                <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='shelfmark', sort_dir='desc' if sort_by == 'shelfmark' and sort_dir == 'asc' else 'asc') }}">Sygnatura{% if sort_by == 'shelfmark' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='folio', sort_dir='desc' if sort_by == 'folio' and sort_dir == 'asc' else 'asc') }}">Folio{% if sort_by == 'folio' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th>Ręka</th>
+                <th><a class="sort-link" href="{{ url_for('scans.list_scans', q=q, sort_by='hand', sort_dir='desc' if sort_by == 'hand' and sort_dir == 'asc' else 'asc') }}">Ręka{% if sort_by == 'hand' %} <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Do próbki uczącej</th>
                 <th>Gotowe</th>
                 <th>Akcje</th>

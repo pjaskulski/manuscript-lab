@@ -6,6 +6,10 @@
         <h1 style="margin-bottom: .35rem;">Raport korpusowy tłumaczeń</h1>
         <div class="muted">Metryki są liczone ponownie dla całego zbioru zapisanych porównań, a nie jako średnia z dokumentów.</div>
     </div>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('translations.export_corpus_report', file_format='csv') }}">Eksport CSV</a>
+        <a class="btn" href="{{ url_for('translations.export_corpus_report', file_format='xlsx') }}">Eksport XLSX</a>
+    </div>
 </div>
 
 <div class="card" style="margin-bottom: 1rem;">

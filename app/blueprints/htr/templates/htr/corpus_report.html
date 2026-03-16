@@ -6,6 +6,10 @@
         <h1 style="margin-bottom: .35rem;">Raport zbiorczy HTR</h1>
         <div class="muted">CER i WER są liczone ponownie dla całego zbioru zapisanych porównań w danej grupie, a nie jako średnia wyników ze skanów.</div>
     </div>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('htr.export_corpus_report', file_format='csv') }}">Eksport CSV</a>
+        <a class="btn" href="{{ url_for('htr.export_corpus_report', file_format='xlsx') }}">Eksport XLSX</a>
+    </div>
 </div>
 
 <div class="card" style="margin-bottom: 1rem;">
