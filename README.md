@@ -123,6 +123,7 @@ Po ustawieniu klucza w widoku `HTR` dla wariantu tekstu pojawia się przycisk `D
 Przykładowe pliki wdrożeniowe:
 - `deploy/manuscript-lab.service` - usługa `systemd` dla `gunicorn`,
 - `deploy/manuscript-lab.nginx.conf` - przykładowy vhost `nginx`.
+- `deploy/backup.sh` - prosty backup SQLite, uploadów i `.env`.
 
 Aplikacja może działać pod prefiksem reverse proxy, np. `/manuscriptlab/`. W takim wariancie `nginx` powinien przekazywać:
 
@@ -146,6 +147,38 @@ Przed użyciem należy dostosować:
 - `User`, `Group`, `WorkingDirectory`, `PATH` i `ExecStart` w `deploy/manuscript-lab.service`,
 - prefiks URL, `server_name` oraz ścieżki `alias` w `deploy/manuscript-lab.nginx.conf`,
 - wartość `SECRET_KEY` w usłudze `systemd`.
+
+## Backup
+
+Najprostszy backup dla tej aplikacji obejmuje:
+- bazę SQLite `instance/app.db`,
+- pliki skanów w `instance/uploads/`,
+- konfigurację z `.env`.
+
+Gotowy skrypt:
+
+```bash
+chmod +x deploy/backup.sh
+./deploy/backup.sh
+```
+
+Domyślnie backupy trafiają do katalogu `backups/` w katalogu projektu i starsze niż 14 dni są usuwane. Możesz to zmienić przez zmienne środowiskowe:
+
+```bash
+BACKUP_DIR=/srv/manuscript-lab-backups RETENTION_DAYS=30 ./deploy/backup.sh
+```
+
+Przykładowy wpis do `crontab`, uruchamiany codziennie o 02:15:
+
+```cron
+15 2 * * * cd /sciezka/do/manuscript-lab && /bin/bash ./deploy/backup.sh >> /var/log/manuscript-lab-backup.log 2>&1
+```
+
+Podgląd i edycja `cron`:
+
+```bash
+crontab -e
+```
 
 ## Struktura folderów i plików
 

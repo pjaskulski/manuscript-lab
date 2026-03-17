@@ -221,3 +221,4 @@ instance/uploads/scans/*
 !instance/uploads/scans/.gitkeep
 instance/app.db
 instance/*.db
+backups/
