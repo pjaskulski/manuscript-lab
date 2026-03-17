@@ -19,6 +19,8 @@
         <dl class="meta-list">
             <dt>Sygnatura źródła</dt>
             <dd>{{ document.document_code or '-' }}</dd>
+            <dt>Adres bibliograficzny</dt>
+            <dd>{{ document.bibliographic_address or '-' }}</dd>
             <dt>Gotowe</dt>
             <dd><span class="status-pill {{ 'yes' if document.is_done else 'no' }}">{{ 'Tak' if document.is_done else 'Nie' }}</span></dd>
         </dl>

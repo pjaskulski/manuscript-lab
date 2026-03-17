@@ -76,7 +76,13 @@ def list_documents():
     query = Document.query
     if q:
         like = f"%{q}%"
-        query = query.filter(db.or_(Document.title.ilike(like), Document.document_code.ilike(like)))
+        query = query.filter(
+            db.or_(
+                Document.title.ilike(like),
+                Document.document_code.ilike(like),
+                Document.bibliographic_address.ilike(like),
+            )
+        )
     documents = query.order_by(*DOCUMENT_SORT_FIELDS[sort_by](sort_dir)).all()
     return render_template("documents/list.html", documents=documents, q=q, sort_by=sort_by, sort_dir=sort_dir)
 
@@ -89,6 +95,7 @@ def new_document():
         document = Document(
             title=form.title.data,
             document_code=form.document_code.data or None,
+            bibliographic_address=form.bibliographic_address.data or None,
             notes=form.notes.data,
             original_text=form.original_text.data,
         )
@@ -163,6 +170,8 @@ def edit_document(document_id: int):
         form.populate_obj(document)
         if not document.document_code:
             document.document_code = None
+        if not document.bibliographic_address:
+            document.bibliographic_address = None
         db.session.commit()
         flash("Zapisano dokument.", "success")
         return redirect(url_for("documents.document_detail", document_id=document.id))

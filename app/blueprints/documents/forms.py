@@ -7,6 +7,7 @@ class DocumentForm(FlaskForm):
     version_token = HiddenField()
     title = StringField("Tytuł", validators=[DataRequired()])
     document_code = StringField("Sygnatura źródła", validators=[Optional()])
+    bibliographic_address = StringField("Adres bibliograficzny", validators=[Optional()])
     notes = TextAreaField("Uwagi", validators=[Optional()])
     is_done = BooleanField("Gotowe", default=False)
     original_text = TextAreaField("Tekst źródłowy", validators=[Optional()])

@@ -8,6 +8,7 @@ class Document(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     document_code = db.Column(db.String(128), nullable=True, unique=True)
+    bibliographic_address = db.Column(db.String(512), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     is_done = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 

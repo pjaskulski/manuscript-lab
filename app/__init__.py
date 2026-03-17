@@ -49,6 +49,9 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
         if "is_done" not in document_columns:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE documents ADD COLUMN is_done BOOLEAN NOT NULL DEFAULT 0"))
+        if "bibliographic_address" not in document_columns:
+            with db.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE documents ADD COLUMN bibliographic_address VARCHAR(512)"))
         if inspector.has_table("translation_comparisons"):
             comparison_columns = {column["name"] for column in inspector.get_columns("translation_comparisons")}
             if "chrf" not in comparison_columns:

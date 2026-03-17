@@ -17,6 +17,7 @@
     {{ form.hidden_tag() }}
     <div>{{ form.title.label }} {{ form.title() }}</div>
     <div>{{ form.document_code.label }} {{ form.document_code() }}</div>
+    <div>{{ form.bibliographic_address.label }} {{ form.bibliographic_address() }}</div>
     <div>{{ form.notes.label }} {{ form.notes(rows=2, class_="document-notes-field") }}</div>
     <div class="checkbox-field">{{ form.is_done() }} {{ form.is_done.label }}</div>
     <div>{{ form.original_text.label }} {{ form.original_text(rows=12, class_="document-original-text-field") }}</div>
