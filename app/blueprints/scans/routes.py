@@ -2,6 +2,7 @@ import io
 import string
 import zipfile
 from pathlib import Path
+from unicodedata import normalize
 
 from flask import Blueprint, current_app, flash, redirect, render_template, request, send_file, send_from_directory, url_for
 
@@ -10,7 +11,7 @@ from ...models import HTRComparison, Scan, ScanText
 from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ..htr.forms import GROUND_TRUTH_TEXT_TYPES
 from ...services.file_storage import save_scan_image
-from .forms import ScanForm, ScanTrainingExportForm
+from .forms import BulkScanImportForm, MAX_BULK_IMPORT_FILES, ScanForm, ScanTrainingExportForm
 
 scans_bp = Blueprint("scans", __name__, template_folder="templates")
 
@@ -34,6 +35,14 @@ def _unique_archive_name(name: str, used_names: set[str]) -> str:
         counter += 1
     used_names.add(candidate)
     return candidate
+
+
+def _scan_title_from_filename(filename: str | None) -> str:
+    if not filename:
+        return "Nowy skan"
+    stem = Path(filename).stem
+    cleaned = normalize("NFKC", stem).replace("_", " ").replace("-", " ").strip()
+    return " ".join(cleaned.split()) or stem or "Nowy skan"
 
 
 def _training_export_candidates() -> list[tuple[Scan, ScanText]]:
@@ -226,6 +235,55 @@ def new_scan():
         flash("Dodano skan.", "success")
         return redirect(url_for("scans.scan_detail", scan_id=scan.id))
     return render_template("scans/form.html", form=form, title="Nowy skan", cancel_url=cancel_url, scan=None)
+
+
+@scans_bp.route("/bulk-import", methods=["GET", "POST"])
+def bulk_import_scans():
+    form = BulkScanImportForm()
+    cancel_url = url_for("scans.list_scans")
+    if form.validate_on_submit():
+        files = [file for file in form.image_files.data if file and file.filename]
+        imported_count = 0
+
+        try:
+            for file in files:
+                stored = save_scan_image(file, current_app.config["UPLOAD_FOLDER"])
+                scan = Scan(
+                    title=_scan_title_from_filename(file.filename),
+                    shelfmark=form.shelfmark.data,
+                    hand=form.hand.data,
+                    notes=form.notes.data,
+                    is_training_sample=form.is_training_sample.data,
+                    image_path=stored["image_path"],
+                    image_width=stored["image_width"],
+                    image_height=stored["image_height"],
+                )
+                db.session.add(scan)
+                imported_count += 1
+
+            db.session.commit()
+        except ValueError as exc:
+            db.session.rollback()
+            flash(str(exc), "danger")
+            return render_template(
+                "scans/bulk_import.html",
+                form=form,
+                cancel_url=cancel_url,
+                max_files=MAX_BULK_IMPORT_FILES,
+            )
+
+        flash(
+            f"Dodano {imported_count} {'skan' if imported_count == 1 else 'skany' if 2 <= imported_count <= 4 else 'skanów'}.",
+            "success",
+        )
+        return redirect(url_for("scans.list_scans"))
+
+    return render_template(
+        "scans/bulk_import.html",
+        form=form,
+        cancel_url=cancel_url,
+        max_files=MAX_BULK_IMPORT_FILES,
+    )
 
 
 @scans_bp.route("/<int:scan_id>")

@@ -56,6 +56,8 @@ Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem do
 
 ![screeenshot](doc/15.png)
 
+![screeenshot](doc/16.png)
+
 ## Instalacja
 
 ```bash

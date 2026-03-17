@@ -68,6 +68,17 @@
         .status-pill.yes { background: #dcfce7; color: #166534; }
         .status-pill.no { background: #e5e7eb; color: #475569; }
         .primary-marker { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; margin-left: .35rem; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-size: .82rem; font-weight: 700; vertical-align: middle; }
+        .dropzone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .35rem; padding: 2rem 1rem; border: 2px dashed #93c5fd; border-radius: 10px; background: #f8fbff; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+        .dropzone:hover, .dropzone:focus-visible, .dropzone.is-dragover { border-color: #2563eb; background: #eff6ff; transform: translateY(-1px); outline: none; }
+        .dropzone input[type="file"] { display: none; }
+        .selected-files { padding: .85rem 1rem; }
+        .selected-files-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: .75rem; }
+        .selected-files-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .45rem; }
+        .selected-files-item { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem .7rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; }
+        .progress-card { border: 1px solid #dbeafe; border-radius: 8px; background: #f8fbff; padding: .9rem 1rem; }
+        .progress-track { height: .8rem; border-radius: 999px; background: #dbeafe; overflow: hidden; }
+        .progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, #2563eb, #0ea5e9); transition: width .2s ease; }
+        @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } .selected-files-item { flex-direction: column; gap: .2rem; } }
     </style>
     {% block head %}{% endblock %}
 </head>

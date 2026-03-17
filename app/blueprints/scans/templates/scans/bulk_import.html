@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Import wielu skanów{% endblock %}
+{% block content %}
+<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
+    <div>
+        <h1>Import wielu skanów</h1>
+        <p class="muted">Załaduj do {{ max_files }} plików naraz. Tytuł każdego skanu zostanie uzupełniony z nazwy pliku.</p>
+    </div>
+</div>
+<form method="post" enctype="multipart/form-data" class="card" id="bulk-import-form">
+    {{ form.hidden_tag() }}
+    <div class="dropzone" id="bulk-dropzone" tabindex="0" role="button" aria-controls="{{ form.image_files.id }}" aria-label="Wybierz lub przeciągnij pliki skanów">
+        <strong>Przeciągnij pliki tutaj</strong>
+        <span class="muted">albo kliknij, by wybrać z dysku</span>
+        {{ form.image_files(id="bulk-file-input", multiple=true, accept=".jpg,.jpeg,.png,.webp,.tif,.tiff") }}
+    </div>
+    {% if form.image_files.errors %}
+    <div class="flash danger">
+        {% for error in form.image_files.errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="selected-files card" id="selected-files-panel" hidden>
+        <div class="selected-files-header">
+            <strong>Wybrane pliki</strong>
+            <span class="muted" id="selected-files-summary">0 / {{ max_files }}</span>
+        </div>
+        <ul class="selected-files-list" id="selected-files-list"></ul>
+    </div>
+    <div class="grid grid-2">
+        <div>{{ form.shelfmark.label }} {{ form.shelfmark() }}</div>
+        <div>{{ form.hand.label }} {{ form.hand() }}</div>
+    </div>
+    <div>{{ form.notes.label }} {{ form.notes() }}</div>
+    <div class="checkbox-field">{{ form.is_training_sample() }} {{ form.is_training_sample.label }}</div>
+    <div class="progress-card" id="upload-progress-card" hidden>
+        <div class="selected-files-header">
+            <strong>Postęp importu</strong>
+            <span class="muted" id="upload-progress-label">0%</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+            <div class="progress-bar" id="upload-progress-bar"></div>
+        </div>
+        <p class="muted small" id="upload-progress-note">Przy większych plikach przesyłanie może chwilę potrwać.</p>
+    </div>
+    <div class="actions">
+        {{ form.submit(class_="btn btn-primary", id="bulk-submit-button") }}
+        <a class="btn" href="{{ cancel_url }}">Anuluj</a>
+    </div>
+</form>
+{% endblock %}
+{% block head %}
+{{ super() }}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const maxFiles = {{ max_files|tojson }};
+    const form = document.getElementById("bulk-import-form");
+    const dropzone = document.getElementById("bulk-dropzone");
+    const input = document.getElementById("bulk-file-input");
+    const panel = document.getElementById("selected-files-panel");
+    const list = document.getElementById("selected-files-list");
+    const summary = document.getElementById("selected-files-summary");
+    const progressCard = document.getElementById("upload-progress-card");
+    const progressBar = document.getElementById("upload-progress-bar");
+    const progressLabel = document.getElementById("upload-progress-label");
+    const progressNote = document.getElementById("upload-progress-note");
+    const submitButton = document.getElementById("bulk-submit-button");
+
+    const formatSize = (size) => {
+        if (!Number.isFinite(size)) {
+            return "";
+        }
+        const units = ["B", "KB", "MB", "GB"];
+        let value = size;
+        let unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex += 1;
+        }
+        return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+    };
+
+    const renderFiles = () => {
+        const files = Array.from(input.files || []);
+        list.innerHTML = "";
+        if (!files.length) {
+            panel.hidden = true;
+            summary.textContent = `0 / ${maxFiles}`;
+            return;
+        }
+        panel.hidden = false;
+        summary.textContent = `${files.length} / ${maxFiles}`;
+        files.forEach((file, index) => {
+            const item = document.createElement("li");
+            item.className = "selected-files-item";
+            item.innerHTML = `<span>${index + 1}. ${file.name}</span><span class="muted">${formatSize(file.size)}</span>`;
+            list.appendChild(item);
+        });
+    };
+
+    const setFiles = (files) => {
+        const limited = files.slice(0, maxFiles);
+        const transfer = new DataTransfer();
+        limited.forEach((file) => transfer.items.add(file));
+        input.files = transfer.files;
+        renderFiles();
+        if (files.length > maxFiles) {
+            window.alert(`Możesz wybrać maksymalnie ${maxFiles} plików naraz.`);
+        }
+    };
+
+    dropzone.addEventListener("click", () => input.click());
+    dropzone.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            input.click();
+        }
+    });
+    input.addEventListener("change", () => setFiles(Array.from(input.files || [])));
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add("is-dragover");
+        });
+    });
+    ["dragleave", "dragend", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.remove("is-dragover");
+        });
+    });
+    dropzone.addEventListener("drop", (event) => {
+        const files = Array.from(event.dataTransfer?.files || []);
+        if (files.length) {
+            setFiles(files);
+        }
+    });
+
+    form.addEventListener("submit", (event) => {
+        const files = Array.from(input.files || []);
+        if (!files.length) {
+            return;
+        }
+        event.preventDefault();
+
+        progressCard.hidden = false;
+        progressBar.style.width = "0%";
+        progressLabel.textContent = "0%";
+        progressNote.textContent = "Trwa przesyłanie plików na serwer.";
+        submitButton.disabled = true;
+
+        const xhr = new XMLHttpRequest();
+        const currentUrl = window.location.href;
+        xhr.open("POST", form.action || window.location.href, true);
+        xhr.responseType = "text";
+
+        xhr.upload.addEventListener("progress", (progressEvent) => {
+            if (!progressEvent.lengthComputable) {
+                progressLabel.textContent = "Trwa przesyłanie...";
+                return;
+            }
+            const percent = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
+            progressBar.style.width = `${percent}%`;
+            progressLabel.textContent = `${percent}%`;
+            if (percent >= 100) {
+                progressNote.textContent = "Pliki zostały wysłane. Serwer kończy import.";
+            }
+        });
+
+        xhr.addEventListener("load", () => {
+            submitButton.disabled = false;
+            if (xhr.status >= 200 && xhr.status < 400 && xhr.responseURL && xhr.responseURL !== currentUrl) {
+                window.location.href = xhr.responseURL;
+                return;
+            }
+            if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+                document.open();
+                document.write(xhr.responseText);
+                document.close();
+                return;
+            }
+            progressNote.textContent = "Import nie powiódł się. Spróbuj ponownie.";
+        });
+
+        xhr.addEventListener("error", () => {
+            submitButton.disabled = false;
+            progressNote.textContent = "Wystąpił błąd sieci podczas importu.";
+        });
+
+        xhr.send(new FormData(form));
+    });
+
+    renderFiles();
+});
+</script>
+{% endblock %}
