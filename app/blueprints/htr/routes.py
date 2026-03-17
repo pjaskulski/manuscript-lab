@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -33,6 +34,10 @@ def _is_ground_truth_type(text_type: str | None) -> bool:
 
 def _text_label(text: ScanText) -> str:
     return text.comparison_display
+
+
+def _normalize_alignment_check_text(value: str) -> str:
+    return re.sub(r"\s+", "", value or "")
 
 
 def _comparison_group_key(comparison: HTRComparison) -> tuple[str, str, str, str, str]:
@@ -238,7 +243,23 @@ def align_scan_text_lines(text_id: int):
         current_app.logger.exception("Gemini alignment failed for scan text %s", text_id)
         return jsonify({"error": "Nie udalo sie przetworzyc tekstu przez Gemini."}), 500
 
-    return jsonify({"formatted_text": formatted_text})
+    normalized_original = _normalize_alignment_check_text(raw_text)
+    normalized_formatted = _normalize_alignment_check_text(formatted_text)
+    exact_match = normalized_formatted == normalized_original
+    contained_match = bool(normalized_formatted) and normalized_formatted in normalized_original
+
+    return jsonify(
+        {
+            "formatted_text": formatted_text,
+            "validation": {
+                "exact_match": exact_match,
+                "contained_match": contained_match,
+                "accepted": exact_match or contained_match,
+                "normalized_original_length": len(normalized_original),
+                "normalized_formatted_length": len(normalized_formatted),
+            },
+        }
+    )
 
 
 @htr_bp.route("/texts/<int:text_id>/delete", methods=["POST"])

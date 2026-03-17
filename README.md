@@ -43,6 +43,8 @@ Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem do
 
 ![screeenshot](doc/10.png)
 
+![screeenshot](doc/17.png)
+
 ![screeenshot](doc/11.png)
 
 ![screeenshot](doc/12.png)

@@ -34,11 +34,25 @@
     .workspace-busy-overlay.is-visible { display: flex; }
     .workspace-busy-card { display: flex; flex-direction: column; align-items: center; gap: .65rem; padding: 1rem 1.2rem; border-radius: 10px; background: white; box-shadow: 0 10px 30px rgba(15, 23, 42, .12); color: #0f172a; }
     .workspace-spinner { width: 2rem; height: 2rem; border-radius: 999px; border: 3px solid #bfdbfe; border-top-color: #2563eb; animation: workspace-spin .9s linear infinite; }
+    .alignment-modal { width: min(56rem, calc(100vw - 2rem)); border: 0; border-radius: 12px; padding: 0; box-shadow: 0 24px 60px rgba(15, 23, 42, .24); }
+    .alignment-modal::backdrop { background: rgba(15, 23, 42, .45); }
+    .alignment-modal-body { padding: 1.2rem; display: grid; gap: 1rem; }
+    .alignment-modal-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
+    .alignment-modal-title { margin: 0; }
+    .alignment-status-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: .85rem 1rem; background: #f8fafc; }
+    .alignment-status-box.warning { border-color: #fcd34d; background: #fffbeb; }
+    .alignment-status-box.success { border-color: #86efac; background: #f0fdf4; }
+    .alignment-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .alignment-preview-panel { min-width: 0; }
+    .alignment-preview-panel h3 { margin: 0 0 .5rem; font-size: 1rem; }
+    .alignment-preview-text { margin: 0; min-height: 14rem; max-height: 22rem; overflow: auto; white-space: pre-wrap; }
+    .alignment-modal-actions { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
     @keyframes workspace-spin { to { transform: rotate(360deg); } }
     @media (max-width: 980px) {
         .workspace-layout { grid-template-columns: 1fr; }
         .workspace-stage { min-height: 50vh; }
         .workspace-editor { height: 45vh; }
+        .alignment-preview { grid-template-columns: 1fr; }
     }
 </style>
 {% endblock %}
@@ -116,6 +130,34 @@
         </form>
     </section>
 </div>
+<dialog class="alignment-modal" id="alignment-preview-modal">
+    <div class="alignment-modal-body">
+        <div class="alignment-modal-header">
+            <div>
+                <h2 class="alignment-modal-title">Podgląd wyniku dopasowania</h2>
+                <p class="muted small" id="alignment-modal-subtitle">Sprawdź wynik przed podmianą tekstu w edytorze.</p>
+            </div>
+        </div>
+        <div class="alignment-status-box" id="alignment-status-box">
+            <strong id="alignment-status-title">Wynik gotowy do użycia</strong>
+            <p class="muted small" id="alignment-status-description" style="margin: .35rem 0 0;">Tekst po normalizacji zgadza się z tekstem wejściowym albo zawiera jego fragment.</p>
+        </div>
+        <div class="alignment-preview">
+            <section class="alignment-preview-panel">
+                <h3>Tekst w edytorze</h3>
+                <div class="text-panel mono alignment-preview-text" id="alignment-original-preview"></div>
+            </section>
+            <section class="alignment-preview-panel">
+                <h3>Wynik AI</h3>
+                <div class="text-panel mono alignment-preview-text" id="alignment-formatted-preview"></div>
+            </section>
+        </div>
+        <div class="alignment-modal-actions">
+            <button type="button" class="btn" id="alignment-reject-button">Odrzuć</button>
+            <button type="button" class="btn btn-primary" id="alignment-accept-button">Akceptuj wynik</button>
+        </div>
+    </div>
+</dialog>
 <script src="{{ url_for('static', filename='js/codemirror.min.js') }}"></script>
 <script>
 (() => {
@@ -129,11 +171,20 @@
     const fontSizeValue = document.getElementById("font-size-value");
     const alignLinesButton = document.getElementById("align-lines-button");
     const busyOverlay = document.getElementById("workspace-busy-overlay");
+    const alignmentModal = document.getElementById("alignment-preview-modal");
+    const alignmentStatusBox = document.getElementById("alignment-status-box");
+    const alignmentStatusTitle = document.getElementById("alignment-status-title");
+    const alignmentStatusDescription = document.getElementById("alignment-status-description");
+    const alignmentOriginalPreview = document.getElementById("alignment-original-preview");
+    const alignmentFormattedPreview = document.getElementById("alignment-formatted-preview");
+    const alignmentAcceptButton = document.getElementById("alignment-accept-button");
+    const alignmentRejectButton = document.getElementById("alignment-reject-button");
     if (!textarea || !editorHost || !form || !closeLink || !saveStatus || !wrapToggle || !fontSizeSlider || !fontSizeValue || typeof CodeMirror === "undefined") return;
 
     const initialValue = textarea.value;
     let isSubmitting = false;
     let isAligning = false;
+    let pendingAlignedText = null;
 
     const editor = CodeMirror(editorHost, {
         value: textarea.value,
@@ -177,6 +228,59 @@
         updateSaveStatus();
     }
 
+    function closeAlignmentModal() {
+        pendingAlignedText = null;
+        if (alignmentModal?.open) {
+            alignmentModal.close();
+        }
+    }
+
+    function applyAlignedText() {
+        if (typeof pendingAlignedText !== "string") {
+            closeAlignmentModal();
+            return;
+        }
+        editor.setValue(pendingAlignedText);
+        textarea.value = editor.getValue();
+        editor.refresh();
+        closeAlignmentModal();
+    }
+
+    function showAlignmentPreview(originalText, formattedText, validation) {
+        if (!alignmentModal || !alignmentStatusBox || !alignmentStatusTitle || !alignmentStatusDescription || !alignmentOriginalPreview || !alignmentFormattedPreview) {
+            editor.setValue(formattedText || "");
+            textarea.value = editor.getValue();
+            editor.refresh();
+            return;
+        }
+
+        pendingAlignedText = formattedText || "";
+        alignmentOriginalPreview.textContent = originalText || "";
+        alignmentFormattedPreview.textContent = formattedText || "";
+
+        const isAccepted = Boolean(validation?.accepted);
+        const exactMatch = Boolean(validation?.exact_match);
+        const containedMatch = Boolean(validation?.contained_match);
+        const originalLength = validation?.normalized_original_length ?? 0;
+        const formattedLength = validation?.normalized_formatted_length ?? 0;
+
+        alignmentStatusBox.classList.toggle("success", isAccepted);
+        alignmentStatusBox.classList.toggle("warning", !isAccepted);
+
+        if (exactMatch) {
+            alignmentStatusTitle.textContent = "Wynik zgodny z tekstem wejściowym";
+            alignmentStatusDescription.textContent = "Po usunięciu białych znaków oba teksty są identyczne.";
+        } else if (containedMatch) {
+            alignmentStatusTitle.textContent = "Wynik obejmuje fragment tekstu wejściowego";
+            alignmentStatusDescription.textContent = `Po normalizacji wynik AI (${formattedLength} znaków) zawiera się w tekście wejściowym (${originalLength} znaków).`;
+        } else {
+            alignmentStatusTitle.textContent = "Wynik wymaga ręcznej weryfikacji";
+            alignmentStatusDescription.textContent = `Po usunięciu białych znaków teksty się różnią. Oryginał ma ${originalLength} znaków, a wynik AI ${formattedLength}. Przed akceptacją sprawdź dokładnie treść.`;
+        }
+
+        alignmentModal.showModal();
+    }
+
     editor.on("change", (instance) => {
         textarea.value = instance.getValue();
         updateSaveStatus();
@@ -216,6 +320,13 @@
         textarea.value = editor.getValue();
     });
 
+    alignmentAcceptButton?.addEventListener("click", applyAlignedText);
+    alignmentRejectButton?.addEventListener("click", closeAlignmentModal);
+    alignmentModal?.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeAlignmentModal();
+    });
+
     window.addEventListener("resize", () => editor.refresh());
 
     window.addEventListener("beforeunload", (event) => {
@@ -228,7 +339,8 @@
 
     if (alignLinesButton) {
         alignLinesButton.addEventListener("click", async () => {
-            const rawText = editor.getValue().trim();
+            const originalText = editor.getValue();
+            const rawText = originalText.trim();
             if (!rawText) {
                 window.alert("Najpierw wprowadz tekst do dopasowania.");
                 return;
@@ -248,9 +360,7 @@
                 if (!response.ok) {
                     throw new Error(payload.error || "Nie udalo sie dopasowac linii.");
                 }
-                editor.setValue(payload.formatted_text || "");
-                textarea.value = editor.getValue();
-                editor.refresh();
+                showAlignmentPreview(originalText, payload.formatted_text || "", payload.validation || null);
             } catch (error) {
                 window.alert(error.message || "Nie udalo sie dopasowac linii.");
             } finally {
