@@ -4,10 +4,13 @@ from .common import TimestampMixin
 
 class Document(TimestampMixin, db.Model):
     __tablename__ = "documents"
+    __table_args__ = (
+        db.UniqueConstraint("document_code", "title", name="uq_document_code_title"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
-    document_code = db.Column(db.String(128), nullable=True, unique=True)
+    document_code = db.Column(db.String(128), nullable=True)
     bibliographic_address = db.Column(db.String(512), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     is_done = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())

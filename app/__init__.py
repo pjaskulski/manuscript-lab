@@ -21,6 +21,59 @@ from .services.model_registry import (
 )
 
 
+def _rebuild_documents_table_for_composite_uniqueness(document_columns: set[str]) -> None:
+    optional_columns: list[str] = []
+    if "bibliographic_address" in document_columns:
+        optional_columns.append("bibliographic_address VARCHAR(512)")
+    if "reference_translation_pl" in document_columns:
+        optional_columns.append("reference_translation_pl TEXT")
+
+    new_table_columns = [
+        "id INTEGER NOT NULL",
+        "title VARCHAR(255) NOT NULL",
+        "document_code VARCHAR(128)",
+        *optional_columns,
+        "notes TEXT",
+        "original_text TEXT",
+        "created_at DATETIME NOT NULL",
+        "updated_at DATETIME NOT NULL",
+        "is_done BOOLEAN NOT NULL DEFAULT 0",
+        "PRIMARY KEY (id)",
+        "CONSTRAINT uq_document_code_title UNIQUE (document_code, title)",
+    ]
+
+    copy_columns = [
+        "id",
+        "title",
+        "document_code",
+        *[column.split()[0] for column in optional_columns],
+        "notes",
+        "original_text",
+        "created_at",
+        "updated_at",
+        "is_done",
+    ]
+    column_list = ", ".join(copy_columns)
+
+    with db.engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.exec_driver_sql("ALTER TABLE documents RENAME TO documents__old")
+        connection.exec_driver_sql(f"CREATE TABLE documents ({', '.join(new_table_columns)})")
+        connection.exec_driver_sql(
+            f"INSERT INTO documents ({column_list}) SELECT {column_list} FROM documents__old"
+        )
+        connection.exec_driver_sql("DROP TABLE documents__old")
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+
+def _documents_table_sql() -> str:
+    with db.engine.begin() as connection:
+        row = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'documents'")
+        ).scalar()
+    return (row or "").lower()
+
+
 def _ensure_sqlite_compat_schema(app: Flask) -> None:
     database_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not database_uri.startswith("sqlite:///"):
@@ -45,13 +98,23 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
         if "main_ground_truth" not in {column["name"] for column in inspector.get_columns("scan_texts")}:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE scan_texts ADD COLUMN main_ground_truth BOOLEAN NOT NULL DEFAULT 0"))
+        if not inspector.has_table("documents"):
+            return
         document_columns = {column["name"] for column in inspector.get_columns("documents")}
         if "is_done" not in document_columns:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE documents ADD COLUMN is_done BOOLEAN NOT NULL DEFAULT 0"))
+            document_columns.add("is_done")
         if "bibliographic_address" not in document_columns:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE documents ADD COLUMN bibliographic_address VARCHAR(512)"))
+            document_columns.add("bibliographic_address")
+        documents_table_sql = _documents_table_sql()
+        has_old_unique = "unique (document_code)" in documents_table_sql
+        has_composite_unique = "unique (document_code, title)" in documents_table_sql
+        if has_old_unique or not has_composite_unique:
+            _rebuild_documents_table_for_composite_uniqueness(document_columns)
+            inspector = inspect(db.engine)
         if inspector.has_table("translation_comparisons"):
             comparison_columns = {column["name"] for column in inspector.get_columns("translation_comparisons")}
             if "chrf" not in comparison_columns:
