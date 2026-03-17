@@ -4,19 +4,16 @@ Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem do
 
 ### Moduł „Skany”
 - dodawanie i edycja definicji skanów,
-- upload obrazu skanu,
+- upload obrazu skanu, także serii skanów
 - dodawanie tekstów typu `ground_truth` i `model_output`,
-- porównanie dwóch wariantów tekstu dla skanu,
-- obliczanie CER i WER,
-- generowanie prostego diff dla wariantów tekstów z HTR.
+- porównanie dwóch wariantów tekstu dla skanu + obliczanie CER i WER,
 
 ### Moduł „Dokumenty”
 - dodawanie i edycja dokumentów,
 - wiązanie dokumentu ze skanami,
-- przechowywanie tekstu źródłowego i tłumaczenia referencyjnego,
-- dodawanie wariantów tłumaczenia,
-- porównanie dwóch wariantów tłumaczenia,
-- obliczanie BLEU i chrF.
+- przechowywanie tekstu źródłowego
+- dodawanie wariantów tłumaczenia, w tym tłumaczenia referencyjnego i tłumaczeń wykonanych automatycznie narzędziem np. modelem językowym,
+- porównanie dwóch wariantów tłumaczenia + obliczanie metryk BLEU i chrF.
 
 ## Wymagania
 - Python 3.11+
@@ -106,19 +103,19 @@ flask --app run.py create-user
 
 Po utworzeniu pierwszego użytkownika logowanie jest dostępne pod `/auth/login`, a pozostałe widoki wymagają zalogowania.
 
-Automatyczne dopasowanie linii w workspace HTR:
+Automatyczne dopasowanie linii w workspace HTR wymaga klucza API do modelu Gemini (domyślnie używany jest Gemini Pro 3.1 Preview):
 
 ```bash
 GEMINI_API_KEY=twoj-klucz-api
 ```
 
-Opcjonalnie można też ustawić własny model:
+Opcjonalnie można też ustawić inny model (inny wariant Gemini):
 
 ```bash
 GEMINI_ALIGNMENT_MODEL=gemini-3-flash-preview
 ```
 
-Po ustawieniu klucza w widoku `HTR` dla wariantu tekstu pojawia się przycisk `Dopasuj linie przez AI`, który bierze obraz skanu i bieżący tekst z edytora, wysyła je do Gemini i wstawia wynik z podziałem na wiersze z powrotem do pola edycji.
+Po ustawieniu klucza w widoku `HTR` dla wariantu tekstu pojawia się przycisk `Dopasuj linie przez AI`, który pobiera obraz skanu i bieżący tekst z edytora, wysyła je do modelu Gemini i wstawia wynik z podziałem na wiersze z powrotem do pola edycji.
 
 Przykładowe pliki wdrożeniowe:
 - `deploy/manuscript-lab.service` - usługa `systemd` dla `gunicorn`,
@@ -155,20 +152,20 @@ Najprostszy backup dla tej aplikacji obejmuje:
 - pliki skanów w `instance/uploads/`,
 - konfigurację z `.env`.
 
-Gotowy skrypt:
+Gotowy skrypt dostępny jest w folderze deploy:
 
 ```bash
 chmod +x deploy/backup.sh
 ./deploy/backup.sh
 ```
 
-Domyślnie backupy trafiają do katalogu `backups/` w katalogu projektu i starsze niż 14 dni są usuwane. Możesz to zmienić przez zmienne środowiskowe:
+Domyślnie backupy trafiają do katalogu `backups/` w katalogu projektu i starsze niż 14 dni są usuwane. Można to modyfikować przez zmienne środowiskowe:
 
 ```bash
 BACKUP_DIR=/srv/manuscript-lab-backups RETENTION_DAYS=30 ./deploy/backup.sh
 ```
 
-Przykładowy wpis do `crontab`, uruchamiany codziennie o 02:15:
+Przykład wpisu do `crontab`, uruchamiany codziennie o 02:15:
 
 ```cron
 15 2 * * * cd /sciezka/do/manuscript-lab && /bin/bash ./deploy/backup.sh >> /var/log/manuscript-lab-backup.log 2>&1
@@ -198,4 +195,4 @@ README.md
 
 ## Uwagi
 - obrazy skanów są zapisywane na dysku w `instance/uploads/scans/`,
-- baza SQLite - wystarczająca dla prototypu i małego zespołu
+- baza SQLite - jest wystarczająca dla prototypu i małego zespołu, dla dużego projektu można pomyśleć o zmianie na np. PostgreSQL.
