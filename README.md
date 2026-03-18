@@ -150,9 +150,9 @@ Przed użyciem należy dostosować:
 ## Backup
 
 Najprostszy backup dla tej aplikacji obejmuje:
-- bazę SQLite `instance/app.db`,
-- pliki skanów w `instance/uploads/`,
-- konfigurację z `.env`.
+- bazę SQLite `instance/app.db`.
+
+Domyślnie skrypt robi kopię tylko bazy danych. To zalecane ustawienie, jeśli pliki skanów są duże i rzadko się zmieniają.
 
 Gotowy skrypt dostępny jest w folderze deploy:
 
@@ -165,6 +165,12 @@ Domyślnie backupy trafiają do katalogu `backups/` w katalogu projektu i starsz
 
 ```bash
 BACKUP_DIR=/srv/manuscript-lab-backups RETENTION_DAYS=30 ./deploy/backup.sh
+```
+
+Jeśli chcesz jednorazowo dołączyć uploady lub `.env`, możesz to włączyć jawnie:
+
+```bash
+INCLUDE_UPLOADS=1 INCLUDE_ENV=1 ./deploy/backup.sh
 ```
 
 Przykład wpisu do `crontab`, uruchamiany codziennie o 02:15:
