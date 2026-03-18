@@ -12,6 +12,7 @@ INSTANCE_DIR = BASE_DIR / "instance"
 
 
 class Config:
+    DEFAULT_MAX_CONTENT_LENGTH = 250 * 1024 * 1024
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     GEMINI_ALIGNMENT_MODEL = os.environ.get("GEMINI_ALIGNMENT_MODEL", "gemini-3.1-pro-preview")
@@ -26,4 +27,4 @@ class Config:
         },
     }
     UPLOAD_FOLDER = (INSTANCE_DIR / "uploads" / "scans").as_posix()
-    MAX_CONTENT_LENGTH = 20 * 1024 * 1024
+    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", DEFAULT_MAX_CONTENT_LENGTH))

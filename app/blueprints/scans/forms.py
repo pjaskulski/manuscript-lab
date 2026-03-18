@@ -6,7 +6,7 @@ from wtforms import BooleanField, HiddenField, IntegerField, StringField, Submit
 from wtforms.validators import DataRequired, Optional, ValidationError
 
 ALLOWED_SCAN_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tif", "tiff"]
-MAX_BULK_IMPORT_FILES = 10
+MAX_BULK_IMPORT_FILES = 20
 
 
 class ScanForm(FlaskForm):
