@@ -49,7 +49,7 @@
                 <td><span class="status-pill {{ 'yes' if scan.is_done else 'no' }}">{{ "Tak" if scan.is_done else "Nie" }}</span></td>
                 <td>
                     <div class="table-actions">
-                        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=scan.id) }}">Podgląd</a>
+                        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir) }}">Podgląd</a>
                         <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.list_scans')) }}">Edytuj metadane</a>
                     </div>
                 </td>

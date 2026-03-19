@@ -3,6 +3,10 @@
 {% block head %}
 {{ super() }}
 <style>
+    .scan-header { margin-bottom: 1rem; }
+    .scan-header-title { margin-bottom: .35rem; }
+    .scan-header-name { font-size: 1.25rem; font-weight: 600; line-height: 1.35; }
+    .scan-header-actions { justify-content: flex-end; margin-top: .85rem; }
     .scan-preview-trigger { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
     .scan-preview-trigger img { display: block; width: 100%; }
     .scan-preview-note { margin-top: .6rem; }
@@ -29,10 +33,19 @@
 {% set scan_filename = scan.image_path.rsplit('/', 1)[-1] %}
 {% set display_scan_filename = scan_filename.split('_', 1)[1] if '_' in scan_filename and scan_filename.split('_', 1)[0]|length == 32 else scan_filename %}
 {% endif %}
-<div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
-    <h1>Skan #{{ scan.id }} — {{ scan.title }}</h1>
-    <div class="actions">
-        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.scan_detail', scan_id=scan.id)) }}">Edytuj metadane</a>
+<div class="scan-header">
+    <div>
+        <h1 class="scan-header-title">Skan #{{ scan.id }}</h1>
+        <div class="muted scan-header-name">{{ scan.title }}</div>
+    </div>
+    <div class="actions scan-header-actions">
+        {% if previous_scan %}
+        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=previous_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">← Poprzedni</a>
+        {% endif %}
+        {% if next_scan %}
+        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=next_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Następny →</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir)) }}">Edytuj metadane</a>
         <a class="btn btn-primary" href="{{ url_for('htr.new_scan_text', scan_id=scan.id) }}">Dodaj tekst</a>
         <a class="btn" href="{{ url_for('htr.compare_scan_texts', scan_id=scan.id) }}">Porównaj HTR</a>
     </div>
@@ -83,10 +96,10 @@
     <table>
         <thead>
             <tr>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='id', text_sort_dir='desc' if text_sort_by == 'id' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if text_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='text_type', text_sort_dir='desc' if text_sort_by == 'text_type' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if text_sort_by == 'text_type' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='source', text_sort_dir='desc' if text_sort_by == 'source' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if text_sort_by == 'source' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, text_sort_by='label', text_sort_dir='desc' if text_sort_by == 'label' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if text_sort_by == 'label' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by='id', text_sort_dir='desc' if text_sort_by == 'id' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if text_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by='text_type', text_sort_dir='desc' if text_sort_by == 'text_type' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if text_sort_by == 'text_type' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by='source', text_sort_dir='desc' if text_sort_by == 'source' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if text_sort_by == 'source' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by='label', text_sort_dir='desc' if text_sort_by == 'label' and text_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if text_sort_by == 'label' %} <span class="sort-arrow">{{ '↑' if text_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Poliniowany</th>
                 <th>Akcje</th>
             </tr>
@@ -124,12 +137,12 @@
     <table>
         <thead>
             <tr>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc') }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc') }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Wzorzec</th>
                 <th>Porównywany</th>
                 <th>Profil</th>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='cer', comparison_sort_dir='desc' if comparison_sort_by == 'cer' and comparison_sort_dir == 'asc' else 'asc') }}">CER{% if comparison_sort_by == 'cer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, comparison_sort_by='wer', comparison_sort_dir='desc' if comparison_sort_by == 'wer' and comparison_sort_dir == 'asc' else 'asc') }}">WER{% if comparison_sort_by == 'wer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by='cer', comparison_sort_dir='desc' if comparison_sort_by == 'cer' and comparison_sort_dir == 'asc' else 'asc') }}">CER{% if comparison_sort_by == 'cer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by='wer', comparison_sort_dir='desc' if comparison_sort_by == 'wer' and comparison_sort_dir == 'asc' else 'asc') }}">WER{% if comparison_sort_by == 'wer' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Akcje</th>
             </tr>
         </thead>

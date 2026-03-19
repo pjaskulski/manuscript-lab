@@ -135,6 +135,39 @@ SCAN_TEXT_SORT_FIELDS = {
     ),
 }
 
+
+def _filtered_scans_query(query_text: str):
+    query = Scan.query
+    if query_text:
+        like = f"%{query_text}%"
+        query = query.filter(
+            db.or_(
+                Scan.title.ilike(like),
+                Scan.shelfmark.ilike(like),
+                Scan.folio.ilike(like),
+                Scan.hand.ilike(like),
+            )
+        )
+    return query
+
+
+def _scan_neighbors(scan_id: int, query_text: str, sort_by: str, sort_dir: str) -> tuple[Scan | None, Scan | None]:
+    scan_ids = [
+        current_scan_id
+        for current_scan_id, in _filtered_scans_query(query_text)
+        .with_entities(Scan.id)
+        .order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir))
+        .all()
+    ]
+    try:
+        index = scan_ids.index(scan_id)
+    except ValueError:
+        return None, None
+
+    previous_scan = Scan.query.get(scan_ids[index - 1]) if index > 0 else None
+    next_scan = Scan.query.get(scan_ids[index + 1]) if index < len(scan_ids) - 1 else None
+    return previous_scan, next_scan
+
 @scans_bp.route("/")
 def list_scans():
     q = request.args.get("q", "").strip()
@@ -144,18 +177,7 @@ def list_scans():
         sort_by = "id"
     if sort_dir not in {"asc", "desc"}:
         sort_dir = "asc"
-    query = Scan.query
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            db.or_(
-                Scan.title.ilike(like),
-                Scan.shelfmark.ilike(like),
-                Scan.folio.ilike(like),
-                Scan.hand.ilike(like),
-            )
-        )
-    scans = query.order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir)).all()
+    scans = _filtered_scans_query(q).order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir)).all()
     return render_template("scans/list.html", scans=scans, q=q, sort_by=sort_by, sort_dir=sort_dir)
 
 
@@ -289,10 +311,17 @@ def bulk_import_scans():
 @scans_bp.route("/<int:scan_id>")
 def scan_detail(scan_id: int):
     scan = Scan.query.get_or_404(scan_id)
+    q = request.args.get("q", "").strip()
+    sort_by = request.args.get("sort_by", "id")
+    sort_dir = request.args.get("sort_dir", "asc")
     text_sort_by = request.args.get("text_sort_by", "id")
     text_sort_dir = request.args.get("text_sort_dir", "asc")
     comparison_sort_by = request.args.get("comparison_sort_by", "id")
     comparison_sort_dir = request.args.get("comparison_sort_dir", "asc")
+    if sort_by not in SCAN_SORT_FIELDS:
+        sort_by = "id"
+    if sort_dir not in {"asc", "desc"}:
+        sort_dir = "asc"
     if text_sort_by not in SCAN_TEXT_SORT_FIELDS:
         text_sort_by = "id"
     if text_sort_dir not in {"asc", "desc"}:
@@ -303,11 +332,17 @@ def scan_detail(scan_id: int):
         comparison_sort_dir = "asc"
     texts = scan.texts.order_by(*SCAN_TEXT_SORT_FIELDS[text_sort_by](text_sort_dir)).all()
     comparisons = scan.comparisons.order_by(*HTR_COMPARISON_SORT_FIELDS[comparison_sort_by](comparison_sort_dir)).all()
+    previous_scan, next_scan = _scan_neighbors(scan.id, q, sort_by, sort_dir)
     return render_template(
         "scans/detail.html",
         scan=scan,
         texts=texts,
         comparisons=comparisons,
+        q=q,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        previous_scan=previous_scan,
+        next_scan=next_scan,
         text_sort_by=text_sort_by,
         text_sort_dir=text_sort_dir,
         comparison_sort_by=comparison_sort_by,
