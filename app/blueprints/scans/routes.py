@@ -10,7 +10,7 @@ from ...extensions import db
 from ...models import HTRComparison, Scan, ScanText
 from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ..htr.forms import GROUND_TRUTH_TEXT_TYPES
-from ...services.file_storage import save_scan_image
+from ...services.file_storage import ensure_scan_thumbnail, save_scan_image, thumbnail_relative_path_for
 from .forms import BulkScanImportForm, MAX_BULK_IMPORT_FILES, ScanForm, ScanTrainingExportForm
 
 scans_bp = Blueprint("scans", __name__, template_folder="templates")
@@ -352,4 +352,21 @@ def delete_scan(scan_id: int):
 @scans_bp.route("/uploads/<path:filename>")
 def uploaded_file(filename: str):
     upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
+    return send_from_directory(upload_dir, filename)
+
+
+@scans_bp.route("/uploads/preview/<path:filename>")
+def uploaded_preview_file(filename: str):
+    upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
+    preview_name = thumbnail_relative_path_for(filename)
+    preview_path = upload_dir / preview_name
+
+    if not preview_path.exists():
+        generated = ensure_scan_thumbnail(filename, current_app.config["UPLOAD_FOLDER"])
+        if generated:
+            preview_name = generated
+            preview_path = upload_dir / preview_name
+
+    if preview_path.exists():
+        return send_from_directory(upload_dir, preview_name)
     return send_from_directory(upload_dir, filename)

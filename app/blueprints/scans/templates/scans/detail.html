@@ -17,7 +17,7 @@
     <div class="card">
         <h2>Obraz</h2>
         {% if scan.image_path %}
-            <img src="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" alt="scan image">
+            <img src="{{ url_for('scans.uploaded_preview_file', filename=scan.image_path) }}" alt="scan image">
             <p class="muted small">{{ scan.image_width or '?' }} × {{ scan.image_height or '?' }} px</p>
             <div class="actions">
                 <a class="btn" href="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" download="{{ display_scan_filename }}">Pobierz</a>

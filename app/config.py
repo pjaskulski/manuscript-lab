@@ -27,4 +27,5 @@ class Config:
         },
     }
     UPLOAD_FOLDER = (INSTANCE_DIR / "uploads" / "scans").as_posix()
+    THUMBNAIL_FOLDER = (INSTANCE_DIR / "uploads" / "scans" / "thumbs").as_posix()
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", DEFAULT_MAX_CONTENT_LENGTH))

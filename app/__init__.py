@@ -12,6 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import db, login_manager, migrate
 from .models.parameter import ParameterModel
+from .models.scan import Scan
 from .models.user import User
 from .services.concurrency import ConcurrentUpdateError
 from .services.model_registry import (
@@ -19,6 +20,7 @@ from .services.model_registry import (
     MODEL_SCOPE_HTR,
     MODEL_SCOPE_TRANSLATION,
 )
+from .services.file_storage import ensure_scan_thumbnail, thumbnail_relative_path_for
 
 
 def _rebuild_documents_table_for_composite_uniqueness(document_columns: set[str]) -> None:
@@ -230,6 +232,37 @@ def _register_cli_commands(app: Flask) -> None:
         db.session.commit()
         click.echo(f"Utworzono użytkownika: {normalized_username}")
 
+    @app.cli.command("generate-scan-thumbnails")
+    @click.option("--force", is_flag=True, help="Przegeneruj miniatury nawet wtedy, gdy plik juz istnieje.")
+    def generate_scan_thumbnails_command(force: bool) -> None:
+        upload_dir = app.config["UPLOAD_FOLDER"]
+        scans = Scan.query.filter(Scan.image_path.isnot(None)).order_by(Scan.id.asc()).all()
+        generated = 0
+        skipped = 0
+        failed = 0
+
+        for scan in scans:
+            image_path = (scan.image_path or "").strip()
+            if not image_path:
+                skipped += 1
+                continue
+
+            thumbnail_path = Path(upload_dir) / thumbnail_relative_path_for(image_path)
+            if thumbnail_path.exists() and not force:
+                skipped += 1
+                continue
+
+            result = ensure_scan_thumbnail(image_path, upload_dir)
+            if result:
+                generated += 1
+            else:
+                failed += 1
+                click.echo(f"Nie udalo sie wygenerowac miniatury dla skanu #{scan.id}: {image_path}", err=True)
+
+        click.echo(
+            f"Miniatury: wygenerowano {generated}, pominieto {skipped}, bledy {failed}."
+        )
+
 
 def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
@@ -238,6 +271,7 @@ def create_app(config_class=Config):
 
     Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     Path(app.config["UPLOAD_FOLDER"]).mkdir(parents=True, exist_ok=True)
+    Path(app.config["THUMBNAIL_FOLDER"]).mkdir(parents=True, exist_ok=True)
 
     db.init_app(app)
     migrate.init_app(app, db)

@@ -103,6 +103,18 @@ Logowanie użytkowników:
 flask --app run.py create-user
 ```
 
+Jednorazowe wygenerowanie miniaturek dla już istniejących skanów:
+
+```bash
+flask --app run.py generate-scan-thumbnails
+```
+
+Jeśli chcesz przegenerować je wszystkie od nowa:
+
+```bash
+flask --app run.py generate-scan-thumbnails --force
+```
+
 Po utworzeniu pierwszego użytkownika logowanie jest dostępne pod `/auth/login`, a pozostałe widoki wymagają zalogowania.
 
 Automatyczne dopasowanie linii w workspace HTR wymaga klucza API do modelu Gemini (domyślnie używany jest Gemini Pro 3.1 Preview):
