@@ -177,13 +177,13 @@ chmod +x deploy/backup.sh
 ./deploy/backup.sh
 ```
 
-Domyślnie backupy trafiają do katalogu `backups/` w katalogu projektu i starsze niż 14 dni są usuwane. Można to modyfikować przez zmienne środowiskowe:
+Domyślnie kopie zapasowe trafiają do katalogu `backups/` w katalogu projektu i starsze niż 14 dni są usuwane. Można to modyfikować przez zmienne środowiskowe:
 
 ```bash
 BACKUP_DIR=/srv/manuscript-lab-backups RETENTION_DAYS=30 ./deploy/backup.sh
 ```
 
-Jeśli chcesz jednorazowo dołączyć uploady lub `.env`, możesz to włączyć jawnie:
+można także jednorazowo dołączyć folder ze skanami lub `.env`, również poprzez zmienne środowiskowe:
 
 ```bash
 INCLUDE_UPLOADS=1 INCLUDE_ENV=1 ./deploy/backup.sh
@@ -218,5 +218,5 @@ README.md
 ```
 
 ## Uwagi
-- obrazy skanów są zapisywane na dysku w `instance/uploads/scans/`,
+- obrazy skanów są zapisywane na dysku w `instance/uploads/scans/`, w podkatalogu `thumbs` generowane są miniatury skanów do wyświetlania w widoku skanu 
 - baza SQLite - jest wystarczająca dla prototypu i małego zespołu, dla dużego projektu można pomyśleć o zmianie na np. PostgreSQL.
