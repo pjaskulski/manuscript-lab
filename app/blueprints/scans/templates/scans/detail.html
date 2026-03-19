@@ -1,5 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Skan {{ scan.id }}{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+    .scan-preview-trigger { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+    .scan-preview-trigger img { display: block; width: 100%; }
+    .scan-preview-note { margin-top: .6rem; }
+    .scan-viewer-modal { width: min(92vw, 1100px); max-width: 1100px; border: 0; border-radius: 12px; padding: 0; box-shadow: 0 24px 60px rgba(15, 23, 42, .24); }
+    .scan-viewer-modal::backdrop { background: rgba(15, 23, 42, .55); }
+    .scan-viewer-shell { display: flex; flex-direction: column; min-height: min(86vh, 860px); background: #fff; }
+    .scan-viewer-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid #e5e7eb; }
+    .scan-viewer-title { margin: 0; font-size: 1.1rem; }
+    .scan-viewer-stage { position: relative; overflow: hidden; flex: 1; min-height: 65vh; background:
+        radial-gradient(circle at top left, rgba(37,99,235,.08), transparent 18rem),
+        linear-gradient(180deg, #f8fafc, #eef2f7); cursor: grab; touch-action: none; user-select: none; }
+    .scan-viewer-stage.is-dragging { cursor: grabbing; }
+    .scan-viewer-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    .scan-viewer-canvas img { display: block; max-width: none; border: 0; border-radius: 0; box-shadow: 0 18px 50px rgba(15, 23, 42, .18); }
+    .scan-viewer-footer { display: flex; justify-content: space-between; gap: .75rem; align-items: center; flex-wrap: wrap; padding: 1rem 1.2rem; border-top: 1px solid #e5e7eb; }
+    @media (max-width: 720px) {
+        .scan-viewer-shell { min-height: 82vh; }
+        .scan-viewer-stage { min-height: 58vh; }
+    }
+</style>
+{% endblock %}
 {% block content %}
 {% if scan.image_path %}
 {% set scan_filename = scan.image_path.rsplit('/', 1)[-1] %}
@@ -17,7 +41,10 @@
     <div class="card">
         <h2>Obraz</h2>
         {% if scan.image_path %}
-            <img src="{{ url_for('scans.uploaded_preview_file', filename=scan.image_path) }}" alt="scan image">
+            <button type="button" class="scan-preview-trigger" id="scan-preview-trigger" aria-label="Otwórz skan w pełnej jakości">
+                <img src="{{ url_for('scans.uploaded_preview_file', filename=scan.image_path) }}" alt="scan image">
+            </button>
+            <p class="muted small scan-preview-note">Kliknij obraz, aby otworzyć pełny skan z możliwością powiększania i przesuwania.</p>
             <p class="muted small">{{ scan.image_width or '?' }} × {{ scan.image_height or '?' }} px</p>
             <div class="actions">
                 <a class="btn" href="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" download="{{ display_scan_filename }}">Pobierz</a>
@@ -129,4 +156,136 @@
         <button class="btn btn-danger" type="submit">Usuń skan</button>
     </form>
 </div>
+{% if scan.image_path %}
+<dialog class="scan-viewer-modal" id="scan-viewer-modal">
+    <div class="scan-viewer-shell">
+        <div class="scan-viewer-header">
+            <div>
+                <h2 class="scan-viewer-title">Pełny podgląd skanu</h2>
+                <p class="muted small">Kółko myszy zmienia skalę, przeciąganie przesuwa obraz.</p>
+            </div>
+            <button type="button" class="btn" id="scan-viewer-close">Zamknij</button>
+        </div>
+        <div class="scan-viewer-stage" id="scan-viewer-stage">
+            <div class="scan-viewer-canvas" id="scan-viewer-canvas">
+                <img src="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" alt="scan image full view" id="scan-viewer-image" draggable="false">
+            </div>
+        </div>
+        <div class="scan-viewer-footer">
+            <span class="status-pill no">Skala: <span id="scan-viewer-zoom" style="margin-left: .25rem;">100%</span></span>
+            <div class="actions">
+                <button type="button" class="btn" id="scan-viewer-reset">Reset widoku</button>
+                <a class="btn" href="{{ url_for('scans.uploaded_file', filename=scan.image_path) }}" download="{{ display_scan_filename }}">Pobierz oryginał</a>
+            </div>
+        </div>
+    </div>
+</dialog>
+<script>
+(() => {
+    const trigger = document.getElementById("scan-preview-trigger");
+    const modal = document.getElementById("scan-viewer-modal");
+    const closeButton = document.getElementById("scan-viewer-close");
+    const resetButton = document.getElementById("scan-viewer-reset");
+    const stage = document.getElementById("scan-viewer-stage");
+    const canvas = document.getElementById("scan-viewer-canvas");
+    const image = document.getElementById("scan-viewer-image");
+    const zoomLabel = document.getElementById("scan-viewer-zoom");
+    if (!trigger || !modal || !closeButton || !resetButton || !stage || !canvas || !image || !zoomLabel) return;
+
+    const state = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0 };
+
+    function update() {
+        canvas.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+    }
+
+    function fitToStage() {
+        const availableWidth = stage.clientWidth;
+        const availableHeight = stage.clientHeight;
+        const imageWidth = image.naturalWidth || image.width;
+        const imageHeight = image.naturalHeight || image.height;
+        if (!availableWidth || !availableHeight || !imageWidth || !imageHeight) {
+            state.scale = 1;
+            state.x = 0;
+            state.y = 0;
+            update();
+            return;
+        }
+
+        const widthScale = availableWidth / imageWidth;
+        const heightScale = availableHeight / imageHeight;
+        state.scale = Math.min(1, Math.max(0.1, Math.min(widthScale, heightScale)));
+        state.x = Math.max(0, (availableWidth - imageWidth * state.scale) / 2);
+        state.y = Math.max(0, (availableHeight - imageHeight * state.scale) / 2);
+        update();
+    }
+
+    function openModal() {
+        modal.showModal();
+        fitToStage();
+    }
+
+    function closeModal() {
+        if (modal.open) {
+            modal.close();
+        }
+    }
+
+    trigger.addEventListener("click", openModal);
+    closeButton.addEventListener("click", closeModal);
+    resetButton.addEventListener("click", fitToStage);
+    modal.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    stage.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const rect = stage.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left;
+        const pointerY = event.clientY - rect.top;
+        const nextScale = Math.min(5, Math.max(0.1, state.scale * (event.deltaY < 0 ? 1.1 : 0.9)));
+        const scaleRatio = nextScale / state.scale;
+        state.x = pointerX - (pointerX - state.x) * scaleRatio;
+        state.y = pointerY - (pointerY - state.y) * scaleRatio;
+        state.scale = nextScale;
+        update();
+    }, { passive: false });
+
+    stage.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        state.dragging = true;
+        state.startX = event.clientX - state.x;
+        state.startY = event.clientY - state.y;
+        stage.classList.add("is-dragging");
+        stage.setPointerCapture(event.pointerId);
+    });
+
+    stage.addEventListener("pointermove", (event) => {
+        if (!state.dragging) return;
+        state.x = event.clientX - state.startX;
+        state.y = event.clientY - state.startY;
+        update();
+    });
+
+    function stopDragging(event) {
+        if (!state.dragging) return;
+        state.dragging = false;
+        stage.classList.remove("is-dragging");
+        if (event && stage.hasPointerCapture(event.pointerId)) {
+            stage.releasePointerCapture(event.pointerId);
+        }
+    }
+
+    stage.addEventListener("pointerup", stopDragging);
+    stage.addEventListener("pointercancel", stopDragging);
+    window.addEventListener("resize", () => {
+        if (modal.open) fitToStage();
+    });
+    image.addEventListener("load", () => {
+        if (modal.open) fitToStage();
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
