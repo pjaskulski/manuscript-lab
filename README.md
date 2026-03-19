@@ -19,6 +19,10 @@ Prototyp aplikacji do pracy ze skanami manuskryptów (HTR) oraz tłumaczeniem do
 - Python 3.11+
 - SQLite
 
+## Uwagi:
+
+Projekt przygotowywany z użyciem AI (Codex 5.4)
+
 ## Zrzuty ekranu
 
 ![screeenshot](doc/00.png)
