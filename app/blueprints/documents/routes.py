@@ -64,6 +64,40 @@ DOCUMENT_COMPARISON_SORT_FIELDS = {
     ),
 }
 
+
+def _filtered_documents_query(query_text: str):
+    query = Document.query
+    if query_text:
+        like = f"%{query_text}%"
+        query = query.filter(
+            db.or_(
+                Document.title.ilike(like),
+                Document.document_code.ilike(like),
+                Document.bibliographic_address.ilike(like),
+            )
+        )
+    return query
+
+
+def _document_neighbors(
+    document_id: int, query_text: str, sort_by: str, sort_dir: str
+) -> tuple[Document | None, Document | None]:
+    document_ids = [
+        current_document_id
+        for current_document_id, in _filtered_documents_query(query_text)
+        .with_entities(Document.id)
+        .order_by(*DOCUMENT_SORT_FIELDS[sort_by](sort_dir))
+        .all()
+    ]
+    try:
+        index = document_ids.index(document_id)
+    except ValueError:
+        return None, None
+
+    previous_document = Document.query.get(document_ids[index - 1]) if index > 0 else None
+    next_document = Document.query.get(document_ids[index + 1]) if index < len(document_ids) - 1 else None
+    return previous_document, next_document
+
 @documents_bp.route("/")
 def list_documents():
     q = request.args.get("q", "").strip()
@@ -73,17 +107,7 @@ def list_documents():
         sort_by = "id"
     if sort_dir not in {"asc", "desc"}:
         sort_dir = "asc"
-    query = Document.query
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            db.or_(
-                Document.title.ilike(like),
-                Document.document_code.ilike(like),
-                Document.bibliographic_address.ilike(like),
-            )
-        )
-    documents = query.order_by(*DOCUMENT_SORT_FIELDS[sort_by](sort_dir)).all()
+    documents = _filtered_documents_query(q).order_by(*DOCUMENT_SORT_FIELDS[sort_by](sort_dir)).all()
     return render_template("documents/list.html", documents=documents, q=q, sort_by=sort_by, sort_dir=sort_dir)
 
 
@@ -109,11 +133,18 @@ def new_document():
 @documents_bp.route("/<int:document_id>")
 def document_detail(document_id: int):
     document = Document.query.get_or_404(document_id)
+    q = request.args.get("q", "").strip()
+    sort_by = request.args.get("sort_by", "id")
+    sort_dir = request.args.get("sort_dir", "asc")
     variant_sort_by = request.args.get("variant_sort_by", "id")
     variant_sort_dir = request.args.get("variant_sort_dir", "asc")
     comparison_sort_by = request.args.get("comparison_sort_by", "id")
     comparison_sort_dir = request.args.get("comparison_sort_dir", "asc")
 
+    if sort_by not in DOCUMENT_SORT_FIELDS:
+        sort_by = "id"
+    if sort_dir not in {"asc", "desc"}:
+        sort_dir = "asc"
     if variant_sort_by not in DOCUMENT_VARIANT_SORT_FIELDS:
         variant_sort_by = "id"
     if variant_sort_dir not in {"asc", "desc"}:
@@ -145,12 +176,18 @@ def document_detail(document_id: int):
     comparisons = document.comparisons.order_by(
         *DOCUMENT_COMPARISON_SORT_FIELDS[comparison_sort_by](comparison_sort_dir)
     ).all()
+    previous_document, next_document = _document_neighbors(document.id, q, sort_by, sort_dir)
     return render_template(
         "documents/detail.html",
         document=document,
         links=links,
         variants=variants,
         comparisons=comparisons,
+        q=q,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        previous_document=previous_document,
+        next_document=next_document,
         variant_sort_by=variant_sort_by,
         variant_sort_dir=variant_sort_dir,
         comparison_sort_by=comparison_sort_by,

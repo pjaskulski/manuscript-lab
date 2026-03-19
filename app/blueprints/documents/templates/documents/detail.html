@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Dokument {{ document.id }}{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+    .document-header { margin-bottom: 1rem; }
+    .document-header-title { margin-bottom: .35rem; }
+    .document-header-name { font-size: 1.25rem; font-weight: 600; line-height: 1.35; }
+    .document-header-actions { justify-content: flex-end; margin-top: .85rem; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="actions" style="justify-content: space-between; margin-bottom: 1rem; row-gap: .75rem;">
-    <div style="margin-right: 1rem;">
-        <h1 style="margin-bottom: .35rem;">Dokument #{{ document.id }}</h1>
-        <div class="muted" style="font-size: 1.25rem; font-weight: 600; line-height: 1.35;">{{ document.title }}</div>
+<div class="document-header">
+    <div>
+        <h1 class="document-header-title">Dokument #{{ document.id }}</h1>
+        <div class="muted document-header-name">{{ document.title }}</div>
     </div>
-    <div class="actions">
-        <a class="btn" href="{{ url_for('documents.edit_document', document_id=document.id, next=url_for('documents.document_detail', document_id=document.id)) }}">Edytuj metadane</a>
+    <div class="actions document-header-actions">
+        {% if previous_document %}
+        <a class="btn" href="{{ url_for('documents.document_detail', document_id=previous_document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">← Poprzedni</a>
+        {% endif %}
+        {% if next_document %}
+        <a class="btn" href="{{ url_for('documents.document_detail', document_id=next_document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Następny →</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('documents.edit_document', document_id=document.id, next=url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir)) }}">Edytuj metadane</a>
         <a class="btn" href="{{ url_for('documents.link_scans', document_id=document.id) }}">Powiąż skan</a>
         <a class="btn" href="{{ url_for('translations.new_variant', document_id=document.id) }}">Dodaj wariant tłumaczenia</a>
         <a class="btn btn-primary" href="{{ url_for('translations.compare_variants', document_id=document.id) }}">Porównaj tłumaczenia</a>
@@ -81,10 +96,10 @@
     <table>
         <thead>
             <tr>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='id', variant_sort_dir='desc' if variant_sort_by == 'id' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if variant_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='variant_type', variant_sort_dir='desc' if variant_sort_by == 'variant_type' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if variant_sort_by == 'variant_type' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='source_model', variant_sort_dir='desc' if variant_sort_by == 'source_model' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if variant_sort_by == 'source_model' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, variant_sort_by='notes', variant_sort_dir='desc' if variant_sort_by == 'notes' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if variant_sort_by == 'notes' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by='id', variant_sort_dir='desc' if variant_sort_by == 'id' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">ID{% if variant_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by='variant_type', variant_sort_dir='desc' if variant_sort_by == 'variant_type' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Typ{% if variant_sort_by == 'variant_type' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by='source_model', variant_sort_dir='desc' if variant_sort_by == 'source_model' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Model{% if variant_sort_by == 'source_model' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, variant_sort_by='notes', variant_sort_dir='desc' if variant_sort_by == 'notes' and variant_sort_dir == 'asc' else 'asc', comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Uwagi{% if variant_sort_by == 'notes' %} <span class="sort-arrow">{{ '↑' if variant_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Akcje</th>
             </tr>
         </thead>
@@ -119,11 +134,11 @@
     <table>
         <thead>
             <tr>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='reference', comparison_sort_dir='desc' if comparison_sort_by == 'reference' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Wzorzec{% if comparison_sort_by == 'reference' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='candidate', comparison_sort_dir='desc' if comparison_sort_by == 'candidate' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Porównywany{% if comparison_sort_by == 'candidate' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='bleu', comparison_sort_dir='desc' if comparison_sort_by == 'bleu' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">BLEU{% if comparison_sort_by == 'bleu' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, comparison_sort_by='chrf', comparison_sort_dir='desc' if comparison_sort_by == 'chrf' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">chrF++{% if comparison_sort_by == 'chrf' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, comparison_sort_by='id', comparison_sort_dir='desc' if comparison_sort_by == 'id' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">ID{% if comparison_sort_by == 'id' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, comparison_sort_by='reference', comparison_sort_dir='desc' if comparison_sort_by == 'reference' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Wzorzec{% if comparison_sort_by == 'reference' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, comparison_sort_by='candidate', comparison_sort_dir='desc' if comparison_sort_by == 'candidate' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">Porównywany{% if comparison_sort_by == 'candidate' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, comparison_sort_by='bleu', comparison_sort_dir='desc' if comparison_sort_by == 'bleu' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">BLEU{% if comparison_sort_by == 'bleu' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th><a class="sort-link" href="{{ url_for('documents.document_detail', document_id=document.id, q=q, sort_by=sort_by, sort_dir=sort_dir, comparison_sort_by='chrf', comparison_sort_dir='desc' if comparison_sort_by == 'chrf' and comparison_sort_dir == 'asc' else 'asc', variant_sort_by=variant_sort_by, variant_sort_dir=variant_sort_dir) }}">chrF++{% if comparison_sort_by == 'chrf' %} <span class="sort-arrow">{{ '↑' if comparison_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                 <th>Akcje</th>
             </tr>
         </thead>
