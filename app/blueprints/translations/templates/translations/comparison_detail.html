@@ -15,8 +15,8 @@
     </div>
     <div class="card">
         <h2>Warianty</h2>
-        <p><strong>Wzorzec:</strong> {{ comparison.reference_variant.source_display or comparison.reference_variant.variant_type }}</p>
-        <p><strong>Porównywany:</strong> {{ comparison.candidate_variant.source_display or comparison.candidate_variant.variant_type }}</p>
+        <p><strong>Wzorzec:</strong> {{ comparison.reference_variant.source_summary or comparison.reference_variant.variant_type }}</p>
+        <p><strong>Porównywany:</strong> {{ comparison.candidate_variant.source_summary or comparison.candidate_variant.variant_type }}</p>
     </div>
 </div>
 <div class="grid grid-2" style="margin-top: 1rem;">

@@ -15,7 +15,12 @@ from ...services.bleu_metrics import (
     compute_corpus_bleu,
     compute_corpus_chrf,
 )
-from ...services.model_registry import MANUAL_MODEL_NAME, MODEL_SCOPE_TRANSLATION, get_model_choices
+from ...services.model_registry import (
+    MANUAL_MODEL_NAME,
+    MODEL_SCOPE_TRANSLATION,
+    get_model_choices,
+    get_prompt_choices,
+)
 from .forms import TranslationCompareForm, TranslationVariantForm
 
 translations_bp = Blueprint("translations", __name__, template_folder="templates")
@@ -34,18 +39,24 @@ def _configure_model_choices(form: TranslationVariantForm, current_value: str | 
         form.source_model.data = (current_value or "").strip() or MANUAL_MODEL_NAME
 
 
+def _configure_prompt_choices(form: TranslationVariantForm, current_value: str | None = None) -> None:
+    form.source_prompt.choices = get_prompt_choices(current_value=current_value)
+    if not form.is_submitted():
+        form.source_prompt.data = (current_value or "").strip()
+
+
 def _variant_label(variant: TranslationVariant) -> str:
-    if variant.source_display:
-        return f"{variant.source_display} ({variant.variant_type})"
+    if variant.source_summary:
+        return f"{variant.source_summary} ({variant.variant_type})"
     return variant.variant_type
 
 
 def _comparison_group_key(comparison: TranslationComparison) -> tuple[str, str, str, str]:
     return (
         comparison.reference_variant.variant_type or "",
-        (comparison.reference_variant.source_display or "").strip(),
+        (comparison.reference_variant.source_summary or "").strip(),
         comparison.candidate_variant.variant_type or "",
-        (comparison.candidate_variant.source_display or "").strip(),
+        (comparison.candidate_variant.source_summary or "").strip(),
     )
 
 
@@ -126,12 +137,14 @@ def new_variant(document_id: int):
     document = Document.query.get_or_404(document_id)
     form = TranslationVariantForm()
     _configure_model_choices(form)
+    _configure_prompt_choices(form)
     cancel_url = url_for("documents.document_detail", document_id=document.id)
     if form.validate_on_submit():
         variant = TranslationVariant(
             document=document,
             variant_type=form.variant_type.data,
             source_model=(form.source_model.data or "").strip() or None,
+            source_prompt=(form.source_prompt.data or "").strip() or None,
             label=form.label.data,
             content=form.content.data,
         )
@@ -152,7 +165,8 @@ def new_variant(document_id: int):
 def edit_variant(variant_id: int):
     variant = TranslationVariant.query.get_or_404(variant_id)
     form = TranslationVariantForm(obj=variant)
-    _configure_model_choices(form, current_value=variant.source_display)
+    _configure_model_choices(form, current_value=variant.source_model)
+    _configure_prompt_choices(form, current_value=variant.source_prompt)
     cancel_url = url_for("documents.document_detail", document_id=variant.document_id)
     if request.method == "GET":
         bind_version_token(form, variant)
@@ -161,6 +175,7 @@ def edit_variant(variant_id: int):
         form.populate_obj(variant)
         variant.source_tool = None
         variant.source_model = (form.source_model.data or "").strip() or None
+        variant.source_prompt = (form.source_prompt.data or "").strip() or None
         _invalidate_variant_comparisons(variant)
         db.session.commit()
         flash("Zapisano wariant tłumaczenia.", "success")
@@ -194,7 +209,7 @@ def compare_variants(document_id: int):
         return redirect(url_for("documents.document_detail", document_id=document.id))
 
     form = TranslationCompareForm()
-    choices = [(v.id, f"{v.source_display or v.variant_type} | {v.variant_type}") for v in variants]
+    choices = [(v.id, f"{v.source_summary or v.variant_type} | {v.variant_type}") for v in variants]
     form.reference_variant_id.choices = choices
     form.candidate_variant_id.choices = choices
 

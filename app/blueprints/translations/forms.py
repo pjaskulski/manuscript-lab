@@ -13,6 +13,7 @@ class TranslationVariantForm(FlaskForm):
     version_token = HiddenField()
     variant_type = SelectField("Typ wariantu", choices=VARIANT_TYPES, validators=[DataRequired()])
     source_model = SelectField("Model", choices=[], validators=[DataRequired()])
+    source_prompt = SelectField("Prompt", choices=[], validators=[Optional()])
     label = StringField("Uwagi", validators=[Optional()])
     content = TextAreaField("Treść", validators=[DataRequired()])
     submit = SubmitField("Zapisz")

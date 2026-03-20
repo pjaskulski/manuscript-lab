@@ -14,6 +14,7 @@ class TranslationVariant(TimestampMixin, db.Model):
 
     source_tool = db.Column(db.String(128), nullable=True)
     source_model = db.Column(db.String(128), nullable=True)
+    source_prompt = db.Column(db.String(128), nullable=True)
 
     document = db.relationship("Document", back_populates="translation_variants")
     reference_comparisons = db.relationship(
@@ -36,6 +37,14 @@ class TranslationVariant(TimestampMixin, db.Model):
         if model and tool and tool.lower() not in model.lower():
             return f"{tool} / {model}"
         return model or tool or None
+
+    @property
+    def source_summary(self) -> str | None:
+        source = self.source_display
+        prompt = (self.source_prompt or "").strip()
+        if source and prompt:
+            return f"{source} / prompt: {prompt}"
+        return source or (f"prompt: {prompt}" if prompt else None)
 
     def __repr__(self):
         return f"<TranslationVariant {self.id} {self.variant_type!r}>"

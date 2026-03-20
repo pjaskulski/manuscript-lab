@@ -14,3 +14,17 @@ class ParameterModel(TimestampMixin, db.Model):
 
     def __repr__(self):
         return f"<ParameterModel {self.scope!r} {self.name!r}>"
+
+
+class ParameterPrompt(TimestampMixin, db.Model):
+    __tablename__ = "parameter_prompts"
+    __table_args__ = (
+        db.UniqueConstraint("name", name="uq_parameter_prompts_name"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    content = db.Column(db.Text, nullable=False, default="")
+
+    def __repr__(self):
+        return f"<ParameterPrompt {self.name!r}>"

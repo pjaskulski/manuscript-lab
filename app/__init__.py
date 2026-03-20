@@ -11,7 +11,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 from .extensions import db, login_manager, migrate
-from .models.parameter import ParameterModel
+from .models.parameter import ParameterModel, ParameterPrompt
 from .models.scan import Scan
 from .models.user import User
 from .services.concurrency import ConcurrentUpdateError
@@ -122,6 +122,11 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
             if "chrf" not in comparison_columns:
                 with db.engine.begin() as connection:
                     connection.execute(text("ALTER TABLE translation_comparisons ADD COLUMN chrf FLOAT"))
+        if inspector.has_table("translation_variants"):
+            translation_variant_columns = {column["name"] for column in inspector.get_columns("translation_variants")}
+            if "source_prompt" not in translation_variant_columns:
+                with db.engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE translation_variants ADD COLUMN source_prompt VARCHAR(128)"))
 
 
 def _ensure_default_parameter_models(app: Flask) -> None:
@@ -129,6 +134,8 @@ def _ensure_default_parameter_models(app: Flask) -> None:
         inspector = inspect(db.engine)
         if not inspector.has_table("parameter_models"):
             ParameterModel.__table__.create(bind=db.engine)
+        if not inspector.has_table("parameter_prompts"):
+            ParameterPrompt.__table__.create(bind=db.engine)
         for scope in (MODEL_SCOPE_HTR, MODEL_SCOPE_TRANSLATION):
             exists = ParameterModel.query.filter_by(scope=scope, name=MANUAL_MODEL_NAME).first()
             if exists is None:

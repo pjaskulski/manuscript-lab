@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ...extensions import db
-from ...models import ParameterModel, ScanText, TranslationVariant
+from ...models import ParameterModel, ParameterPrompt, ScanText, TranslationVariant
 from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ...services.model_registry import (
     MANUAL_MODEL_NAME,
@@ -9,7 +9,7 @@ from ...services.model_registry import (
     MODEL_SCOPE_LABELS,
     MODEL_SCOPE_TRANSLATION,
 )
-from .forms import ParameterModelForm
+from .forms import ParameterModelForm, ParameterPromptForm
 
 parameters_bp = Blueprint("parameters", __name__, template_folder="templates")
 
@@ -27,6 +27,7 @@ def index():
     sort_dirs = {
         MODEL_SCOPE_HTR: request.args.get("htr_sort_dir", "asc"),
         MODEL_SCOPE_TRANSLATION: request.args.get("translation_sort_dir", "asc"),
+        "prompt": request.args.get("prompt_sort_dir", "asc"),
     }
     for scope in sort_dirs:
         if sort_dirs[scope] not in {"asc", "desc"}:
@@ -52,6 +53,13 @@ def index():
     return render_template(
         "parameters/index.html",
         groups=groups,
+        prompts=(
+            ParameterPrompt.query.order_by(
+                ParameterPrompt.name.asc() if sort_dirs["prompt"] == "asc" else ParameterPrompt.name.desc(),
+                ParameterPrompt.id.asc(),
+            ).all()
+        ),
+        prompt_sort_dir=sort_dirs["prompt"],
         manual_model_name=MANUAL_MODEL_NAME,
         htr_scope=MODEL_SCOPE_HTR,
         translation_scope=MODEL_SCOPE_TRANSLATION,
@@ -130,6 +138,15 @@ def _model_is_in_use(model: ParameterModel) -> bool:
     return False
 
 
+def _prompt_is_in_use(prompt: ParameterPrompt) -> bool:
+    return (
+        db.session.query(TranslationVariant.id)
+        .filter(TranslationVariant.source_prompt == prompt.name)
+        .first()
+        is not None
+    )
+
+
 @parameters_bp.route("/models/<int:model_id>/delete", methods=["POST"])
 def delete_model(model_id: int):
     model = ParameterModel.query.get_or_404(model_id)
@@ -142,4 +159,80 @@ def delete_model(model_id: int):
     db.session.delete(model)
     db.session.commit()
     flash("Usunięto model ze słownika.", "success")
+    return redirect(url_for("parameters.index"))
+
+
+@parameters_bp.route("/prompts/new", methods=["GET", "POST"])
+def new_prompt():
+    form = ParameterPromptForm()
+    cancel_url = url_for("parameters.index")
+    if form.validate_on_submit():
+        name = (form.name.data or "").strip()
+        content = (form.content.data or "").strip()
+        exists = ParameterPrompt.query.filter_by(name=name).first()
+        if not name:
+            flash("Nazwa promptu nie może być pusta.", "warning")
+        elif not content:
+            flash("Treść promptu nie może być pusta.", "warning")
+        elif exists is not None:
+            flash("Prompt o tej nazwie już istnieje.", "warning")
+        else:
+            db.session.add(ParameterPrompt(name=name, content=content))
+            db.session.commit()
+            flash("Dodano prompt do słownika.", "success")
+            return redirect(url_for("parameters.index"))
+    return render_template(
+        "parameters/prompt_form.html",
+        form=form,
+        title="Nowy prompt tłumaczenia",
+        cancel_url=cancel_url,
+    )
+
+
+@parameters_bp.route("/prompts/<int:prompt_id>/edit", methods=["GET", "POST"])
+def edit_prompt(prompt_id: int):
+    prompt = ParameterPrompt.query.get_or_404(prompt_id)
+    form = ParameterPromptForm(obj=prompt)
+    cancel_url = url_for("parameters.index")
+    if request.method == "GET":
+        bind_version_token(form, prompt)
+    if form.validate_on_submit():
+        ensure_version_token_matches(form, prompt)
+        name = (form.name.data or "").strip()
+        content = (form.content.data or "").strip()
+        exists = ParameterPrompt.query.filter_by(name=name).filter(ParameterPrompt.id != prompt.id).first()
+        if not name:
+            flash("Nazwa promptu nie może być pusta.", "warning")
+        elif not content:
+            flash("Treść promptu nie może być pusta.", "warning")
+        elif exists is not None:
+            flash("Prompt o tej nazwie już istnieje.", "warning")
+        else:
+            old_name = prompt.name
+            prompt.name = name
+            prompt.content = content
+            if old_name != name:
+                variants = TranslationVariant.query.filter_by(source_prompt=old_name).all()
+                for variant in variants:
+                    variant.source_prompt = name
+            db.session.commit()
+            flash("Zapisano prompt.", "success")
+            return redirect(url_for("parameters.index"))
+    return render_template(
+        "parameters/prompt_form.html",
+        form=form,
+        title="Edycja promptu tłumaczenia",
+        cancel_url=cancel_url,
+    )
+
+
+@parameters_bp.route("/prompts/<int:prompt_id>/delete", methods=["POST"])
+def delete_prompt(prompt_id: int):
+    prompt = ParameterPrompt.query.get_or_404(prompt_id)
+    if _prompt_is_in_use(prompt):
+        flash("Nie można usunąć promptu, ponieważ jest używany w istniejących wariantach.", "warning")
+        return redirect(url_for("parameters.index"))
+    db.session.delete(prompt)
+    db.session.commit()
+    flash("Usunięto prompt ze słownika.", "success")
     return redirect(url_for("parameters.index"))

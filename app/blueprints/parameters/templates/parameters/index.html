@@ -1,9 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Parametry{% endblock %}
+{% block head %}
+<style>
+    .prompt-actions-col { width: 1%; white-space: nowrap; }
+    .prompt-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: nowrap; }
+    .prompt-actions form { margin: 0; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
     <h1>Parametry</h1>
-    <p class="muted">Słowniki modeli używanych w module skanów i dokumentów.</p>
+    <p class="muted">Słowniki modeli i promptów używanych w module skanów i tłumaczeń.</p>
 </div>
 
 <div class="grid grid-2">
@@ -15,7 +22,7 @@
         <table>
             <thead>
                 <tr>
-                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir='desc' if groups[htr_scope].sort_dir == 'asc' else 'asc', translation_sort_dir=groups[translation_scope].sort_dir) }}">Model{% if groups[htr_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[htr_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir='desc' if groups[htr_scope].sort_dir == 'asc' else 'asc', translation_sort_dir=groups[translation_scope].sort_dir, prompt_sort_dir=prompt_sort_dir) }}">Model{% if groups[htr_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[htr_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                     <th>Akcje</th>
                 </tr>
             </thead>
@@ -47,7 +54,7 @@
         <table>
             <thead>
                 <tr>
-                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir=groups[htr_scope].sort_dir, translation_sort_dir='desc' if groups[translation_scope].sort_dir == 'asc' else 'asc') }}">Model{% if groups[translation_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[translation_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                    <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir=groups[htr_scope].sort_dir, translation_sort_dir='desc' if groups[translation_scope].sort_dir == 'asc' else 'asc', prompt_sort_dir=prompt_sort_dir) }}">Model{% if groups[translation_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[translation_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
                     <th>Akcje</th>
                 </tr>
             </thead>
@@ -70,5 +77,39 @@
             </tbody>
         </table>
     </div>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+    <div class="actions" style="justify-content: space-between;">
+        <h2>Prompty tłumaczeń</h2>
+        <a class="btn btn-primary" href="{{ url_for('parameters.new_prompt') }}">Dodaj prompt</a>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir=groups[htr_scope].sort_dir, translation_sort_dir=groups[translation_scope].sort_dir, prompt_sort_dir='desc' if prompt_sort_dir == 'asc' else 'asc') }}">Nazwa promptu{% if prompt_sort_dir %} <span class="sort-arrow">{{ '↑' if prompt_sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
+                <th>Treść promptu</th>
+                <th class="prompt-actions-col">Akcje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for prompt in prompts %}
+            <tr>
+                <td>{{ prompt.name }}</td>
+                <td><div class="mono small">{{ prompt.content[:400] }}{% if prompt.content|length > 400 %}…{% endif %}</div></td>
+                <td class="prompt-actions-col">
+                    <div class="prompt-actions">
+                        <a class="btn" href="{{ url_for('parameters.edit_prompt', prompt_id=prompt.id) }}">Edytuj</a>
+                        <form method="post" action="{{ url_for('parameters.delete_prompt', prompt_id=prompt.id) }}" onsubmit="return confirm('Usunąć prompt ze słownika?');">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3">Brak promptów.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 {% endblock %}

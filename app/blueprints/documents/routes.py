@@ -33,6 +33,11 @@ DOCUMENT_VARIANT_SORT_FIELDS = {
         if direction == "asc"
         else (TranslationVariant.source_model.desc().nullslast(), TranslationVariant.id.asc())
     ),
+    "source_prompt": lambda direction: (
+        (TranslationVariant.source_prompt.asc().nullslast(), TranslationVariant.id.asc())
+        if direction == "asc"
+        else (TranslationVariant.source_prompt.desc().nullslast(), TranslationVariant.id.asc())
+    ),
     "notes": lambda direction: (
         (TranslationVariant.label.asc().nullslast(), TranslationVariant.id.asc())
         if direction == "asc"
