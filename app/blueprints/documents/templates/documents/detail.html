@@ -8,6 +8,23 @@
     .document-header-name { font-size: 1.25rem; font-weight: 600; line-height: 1.35; }
     .document-header-actions { justify-content: flex-end; margin-top: .85rem; }
 </style>
+<script>
+function confirmRebuildOriginalText(form) {
+    const confirmField = form.querySelector('input[name="confirm_overwrite"]');
+    const requiresConfirm = form.dataset.requiresConfirm === "1";
+    if (confirmField) {
+        confirmField.value = "0";
+    }
+    if (!requiresConfirm) {
+        return true;
+    }
+    const accepted = window.confirm("Obecny tekst źródłowy dokumentu nie jest pusty. Czy zastąpić go tekstem wygenerowanym ze skanów?");
+    if (accepted && confirmField) {
+        confirmField.value = "1";
+    }
+    return accepted;
+}
+</script>
 {% endblock %}
 {% block content %}
 <div class="document-header">
@@ -46,7 +63,9 @@
     </div>
     <div class="card">
         <h2>Operacje</h2>
-        <form method="post" action="{{ url_for('documents.rebuild_original_text', document_id=document.id) }}" style="margin-bottom: .8rem;">
+        <form method="post" action="{{ url_for('documents.rebuild_original_text', document_id=document.id) }}" style="margin-bottom: .8rem;" onsubmit="return confirmRebuildOriginalText(this);" data-requires-confirm="{{ '1' if document.original_text and document.original_text.strip() else '0' }}">
+            <input type="hidden" name="version_token" value="{{ document.updated_at.isoformat() if document.updated_at else '' }}">
+            <input type="hidden" name="confirm_overwrite" value="0">
             <button class="btn" type="submit">Przebuduj tekst źródłowy ze skanów</button>
         </form>
         <form method="post" action="{{ url_for('documents.delete_document', document_id=document.id) }}" onsubmit="return confirm('Usunąć dokument?');">

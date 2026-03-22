@@ -2,7 +2,12 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ...extensions import db
 from ...models import Document, DocumentScanLink, Scan, ScanText, TranslationComparison, TranslationVariant
-from ...services.concurrency import bind_version_token, ensure_version_token_matches
+from ...services.concurrency import (
+    ConcurrentUpdateError,
+    bind_version_token,
+    ensure_version_token_matches,
+    version_token_for,
+)
 from ...services.bleu_metrics import compute_bleu, compute_chrf
 from ...services.document_builder import build_document_text_from_scan_texts
 from .forms import DocumentForm, LinkScanForm
@@ -102,6 +107,24 @@ def _document_neighbors(
     previous_document = Document.query.get(document_ids[index - 1]) if index > 0 else None
     next_document = Document.query.get(document_ids[index + 1]) if index < len(document_ids) - 1 else None
     return previous_document, next_document
+
+
+def _primary_ground_truth_for_scan(scan_id: int) -> ScanText | None:
+    return (
+        ScanText.query.filter(
+            ScanText.scan_id == scan_id,
+            ScanText.main_ground_truth.is_(True),
+            ScanText.text_type.in_(
+                (
+                    "ground_truth",
+                    "ground_truth_diplomatic",
+                    "ground_truth_expanded",
+                )
+            ),
+        )
+        .order_by(ScanText.updated_at.desc(), ScanText.id.desc())
+        .first()
+    )
 
 @documents_bp.route("/")
 def list_documents():
@@ -307,22 +330,48 @@ def delete_link(link_id: int):
 @documents_bp.route("/<int:document_id>/rebuild-original-text", methods=["POST"])
 def rebuild_original_text(document_id: int):
     document = Document.query.get_or_404(document_id)
-    texts = []
-    for link in document.scan_links.order_by(DocumentScanLink.ordering.asc()).all():
-        preferred = (
-            ScanText.query.filter_by(scan_id=link.scan_id, text_type="htr_expanded")
-            .order_by(ScanText.updated_at.desc())
-            .first()
+    submitted_token = (request.form.get("version_token") or "").strip()
+    current_token = version_token_for(document)
+    if submitted_token and submitted_token != current_token:
+        raise ConcurrentUpdateError(
+            "Ten dokument został zmieniony przez innego użytkownika. Odśwież widok i spróbuj ponownie."
         )
-        fallback = (
-            ScanText.query.filter_by(scan_id=link.scan_id, text_type="ground_truth")
-            .order_by(ScanText.updated_at.desc())
-            .first()
+
+    links = document.scan_links.order_by(DocumentScanLink.ordering.asc()).all()
+    if not links:
+        flash("Nie można przebudować tekstu źródłowego, ponieważ dokument nie ma powiązanych skanów.", "warning")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    texts: list[str] = []
+    scans_without_primary_ground_truth: list[str] = []
+    for link in links:
+        chosen = _primary_ground_truth_for_scan(link.scan_id)
+        if chosen is None or not (chosen.content or "").strip():
+            scan_label = f"#{link.scan.id} — {link.scan.title}"
+            scans_without_primary_ground_truth.append(scan_label)
+            continue
+        texts.append(chosen.content)
+
+    if scans_without_primary_ground_truth:
+        flash(
+            "Nie można przebudować tekstu źródłowego. Następujące skany nie mają podstawowego wariantu ground truth: "
+            + ", ".join(scans_without_primary_ground_truth),
+            "warning",
         )
-        chosen = preferred or fallback
-        if chosen:
-            texts.append(chosen.content)
-    document.original_text = build_document_text_from_scan_texts(texts)
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    rebuilt_text = build_document_text_from_scan_texts(texts)
+    if not rebuilt_text.strip():
+        flash("Nie udało się zbudować tekstu źródłowego ze skanów, ponieważ podstawowe warianty ground truth są puste.", "warning")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    current_original_text = (document.original_text or "").strip()
+    confirm_overwrite = (request.form.get("confirm_overwrite") or "").strip() == "1"
+    if current_original_text and not confirm_overwrite:
+        flash("Tekst źródłowy dokumentu nie jest pusty. Potwierdź zastąpienie obecnej treści tekstem zbudowanym ze skanów.", "warning")
+        return redirect(url_for("documents.document_detail", document_id=document.id))
+
+    document.original_text = rebuilt_text
     db.session.commit()
     flash("Przebudowano tekst źródłowy dokumentu.", "success")
     return redirect(url_for("documents.document_detail", document_id=document.id))
