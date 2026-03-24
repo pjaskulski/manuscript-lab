@@ -293,6 +293,7 @@ def auto_translate_document(document_id: int):
             "source_model": selected_model.name,
             "api_definition": selected_model.api_definition,
             "model_code": selected_model.model_code,
+            "elapsed_ms": result.elapsed_ms,
         }
     )
 

@@ -7,6 +7,9 @@
     .translation-form-grid { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
     .translation-status-box { padding: .7rem .85rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; }
     .translation-status-box.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .translation-status-box.busy { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+    .translation-status-box strong { display: block; margin-bottom: .25rem; }
+    .translation-status-meta { margin-top: .35rem; font-variant-numeric: tabular-nums; }
     @media (max-width: 800px) { .translation-form-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -35,11 +38,15 @@
         <div class="muted small translation-form-note">Automatyczne tłumaczenie korzysta z pola „Tekst źródłowy” dokumentu.</div>
     </div>
     <div id="translation-auto-status" class="translation-status-box muted small">
-        {% if document.original_text and document.original_text.strip() %}
-        Wybierz model z obsługą API, aby wygenerować tłumaczenie automatycznie.
-        {% else %}
-        Ten dokument nie ma jeszcze tekstu źródłowego do przetłumaczenia.
-        {% endif %}
+        <strong id="translation-auto-status-title">Status tłumaczenia</strong>
+        <div id="translation-auto-status-message">
+            {% if document.original_text and document.original_text.strip() %}
+            Wybierz model z obsługą API, aby wygenerować tłumaczenie automatycznie.
+            {% else %}
+            Ten dokument nie ma jeszcze tekstu źródłowego do przetłumaczenia.
+            {% endif %}
+        </div>
+        <div id="translation-auto-status-meta" class="translation-status-meta"></div>
     </div>
     <div class="actions">
         {{ form.translate_submit(class_="btn", id="translate-submit-button", type="button", disabled=not (selected_model_metadata.supports_auto_translation and document.original_text and document.original_text.strip())) }}
@@ -57,12 +64,18 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
     const promptSelect = document.getElementById("source-prompt");
     const contentField = document.getElementById("translation-content");
     const statusBox = document.getElementById("translation-auto-status");
+    const statusTitle = document.getElementById("translation-auto-status-title");
+    const statusMessage = document.getElementById("translation-auto-status-message");
+    const statusMeta = document.getElementById("translation-auto-status-meta");
     const metaBox = document.getElementById("translation-model-meta");
     const autoButton = document.getElementById("translate-submit-button");
     const sourceToolField = document.getElementById("auto_source_tool");
     const hasSourceText = {{ 'true' if document.original_text and document.original_text.strip() else 'false' }};
+    const sourceTextLength = {{ (document.original_text or '')|length }};
+    let translationStartedAt = null;
+    let translationTimerId = null;
 
-    if (!form || !variantTypeSelect || !modelSelect || !promptSelect || !contentField || !statusBox || !autoButton || !sourceToolField) {
+    if (!form || !variantTypeSelect || !modelSelect || !promptSelect || !contentField || !statusBox || !statusTitle || !statusMessage || !statusMeta || !autoButton || !sourceToolField) {
         return;
     }
 
@@ -82,7 +95,60 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
         return metadata.api_definition === "gemini-api" || metadata.api_definition === "openai-api";
     }
 
-    function refreshAutoTranslateState(statusMessage = null, isError = false, clearSourceTool = false) {
+    function formatDuration(seconds) {
+        const totalSeconds = Math.max(0, Math.floor(seconds));
+        const minutes = Math.floor(totalSeconds / 60);
+        const remainingSeconds = totalSeconds % 60;
+        return minutes > 0
+            ? `${minutes} min ${String(remainingSeconds).padStart(2, "0")} s`
+            : `${remainingSeconds} s`;
+    }
+
+    function estimatedComplexityLabel() {
+        if (sourceTextLength > 12000) {
+            return "duzy dokument";
+        }
+        if (sourceTextLength > 4000) {
+            return "sredni dokument";
+        }
+        return "krotszy dokument";
+    }
+
+    function stopProgressTimer() {
+        if (translationTimerId) {
+            window.clearInterval(translationTimerId);
+            translationTimerId = null;
+        }
+        translationStartedAt = null;
+    }
+
+    function setStatus(title, message, mode = "idle", meta = "") {
+        statusTitle.textContent = title;
+        statusMessage.textContent = message;
+        statusMeta.textContent = meta;
+        statusBox.classList.toggle("error", mode === "error");
+        statusBox.classList.toggle("busy", mode === "busy");
+    }
+
+    function startProgressTimer(metadata) {
+        stopProgressTimer();
+        translationStartedAt = Date.now();
+        const promptInfo = modelUsesPrompt(metadata) && promptSelect.value ? ` | prompt: ${promptSelect.value}` : "";
+        const metaPrefix = `Model: ${modelSelect.value || "-"}${promptInfo} | skala: ${estimatedComplexityLabel()} (${sourceTextLength} znakow)`;
+        const update = () => {
+            const elapsedSeconds = (Date.now() - translationStartedAt) / 1000;
+            setStatus(
+                "Trwa tlumaczenie",
+                "Gemini przetwarza dokument. Operacja moze potrwac dluzej przy wiekszym tekscie.",
+                "busy",
+                `${metaPrefix} | czas: ${formatDuration(elapsedSeconds)}`
+            );
+        };
+        update();
+        translationTimerId = window.setInterval(update, 1000);
+    }
+
+    function refreshAutoTranslateState(statusMessageText = null, isError = false, clearSourceTool = false) {
         const referenceVariant = isReferenceVariant();
         const metadata = selectedMetadata();
         if (metadata.api_definition) {
@@ -103,38 +169,37 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
             promptSelect.value = "";
         }
         autoButton.disabled = referenceVariant || !hasSourceText || !metadata.supports_auto_translation;
-        if (statusMessage) {
-            statusBox.textContent = statusMessage;
-            statusBox.classList.toggle("error", isError);
+        if (statusMessageText) {
+            setStatus("Status tlumaczenia", statusMessageText, isError ? "error" : "idle");
             return;
         }
         if (referenceVariant) {
-            statusBox.textContent = "Wariant referencyjny jest tłumaczeniem ręcznym, więc nie używa modelu, promptu ani automatycznego tłumaczenia.";
-            statusBox.classList.remove("error");
+            setStatus("Status tlumaczenia", "Wariant referencyjny jest tłumaczeniem ręcznym, więc nie używa modelu, promptu ani automatycznego tłumaczenia.");
             return;
         }
         if (usesPrompt && !metadata.supports_auto_translation) {
-            statusBox.textContent = "Dla tego modelu można ustawić prompt, ale automatyczne tłumaczenie nie jest jeszcze zaimplementowane.";
-            statusBox.classList.remove("error");
+            setStatus("Status tlumaczenia", "Dla tego modelu mozna ustawic prompt, ale automatyczne tlumaczenie nie jest jeszcze zaimplementowane.");
             return;
         }
         if (!usesPrompt && (metadata.api_definition === "deepl-api" || metadata.api_definition === "google-translate")) {
-            statusBox.textContent = "Wybrany silnik tłumaczenia działa bez promptu.";
-            statusBox.classList.remove("error");
+            setStatus("Status tlumaczenia", "Wybrany silnik tlumaczenia dziala bez promptu.");
             return;
         }
         if (!hasSourceText) {
-            statusBox.textContent = "Ten dokument nie ma jeszcze tekstu źródłowego do przetłumaczenia.";
-            statusBox.classList.remove("error");
+            setStatus("Status tlumaczenia", "Ten dokument nie ma jeszcze tekstu zrodlowego do przetlumaczenia.");
             return;
         }
         if (!metadata.supports_auto_translation) {
-            statusBox.textContent = "Wybrany model nie obsługuje jeszcze automatycznego tłumaczenia.";
-            statusBox.classList.remove("error");
+            setStatus("Status tlumaczenia", "Wybrany model nie obsluguje jeszcze automatycznego tlumaczenia.");
             return;
         }
-        statusBox.textContent = "Model jest gotowy do wygenerowania tłumaczenia.";
-        statusBox.classList.remove("error");
+        const promptInfo = usesPrompt && promptSelect.value ? ` Wybrany prompt: ${promptSelect.value}.` : "";
+        setStatus(
+            "Status tlumaczenia",
+            `Model jest gotowy do wygenerowania tlumaczenia.${promptInfo}`,
+            "idle",
+            `Skala zadania: ${estimatedComplexityLabel()} (${sourceTextLength} znakow tekstu zrodlowego)`
+        );
     }
 
     variantTypeSelect.addEventListener("change", () => {
@@ -164,8 +229,7 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
         }
 
         autoButton.disabled = true;
-        statusBox.textContent = "Generowanie tłumaczenia trwa.";
-        statusBox.classList.remove("error");
+        startProgressTimer(selectedMetadata());
 
         try {
             const response = await fetch(form.dataset.autoTranslateUrl, {
@@ -179,10 +243,21 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
             if (!response.ok) {
                 throw new Error(payload.error || "Nie udało się wygenerować tłumaczenia.");
             }
+            stopProgressTimer();
             contentField.value = payload.content || "";
             sourceToolField.value = payload.source_tool || "";
-            refreshAutoTranslateState("Tłumaczenie zostało wygenerowane i wpisane do pola Treść.", false);
+            const elapsedSeconds = Number.isFinite(payload.elapsed_ms) ? payload.elapsed_ms / 1000 : null;
+            const successMeta = elapsedSeconds !== null
+                ? `Czas generowania: ${formatDuration(elapsedSeconds)} | model: ${payload.source_model || modelSelect.value || "-"}`
+                : `Model: ${payload.source_model || modelSelect.value || "-"}`;
+            setStatus(
+                "Tlumaczenie gotowe",
+                "Tlumaczenie zostalo wygenerowane i wpisane do pola Tresc.",
+                "idle",
+                successMeta
+            );
         } catch (error) {
+            stopProgressTimer();
             refreshAutoTranslateState(error.message || "Nie udało się wygenerować tłumaczenia.", true);
         } finally {
             autoButton.disabled = !hasSourceText || !selectedMetadata().supports_auto_translation;
