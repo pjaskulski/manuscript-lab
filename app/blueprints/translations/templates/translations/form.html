@@ -1,18 +1,193 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+    .translation-form-note { margin-top: .4rem; }
+    .translation-form-grid { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
+    .translation-status-box { padding: .7rem .85rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; }
+    .translation-status-box.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    @media (max-width: 800px) { .translation-form-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
 {% block content %}
 <h1>{{ title }}</h1>
 <p class="muted">Dokument: <a href="{{ url_for('documents.document_detail', document_id=document.id) }}">#{{ document.id }} — {{ document.title }}</a></p>
-<form method="post" class="card">
+<form method="post" class="card" id="translation-variant-form" data-auto-translate-url="{{ url_for('translations.auto_translate_document', document_id=document.id) }}">
     {{ form.hidden_tag() }}
-    <div>{{ form.variant_type.label }} {{ form.variant_type() }}</div>
-    <div>{{ form.source_model.label }} {{ form.source_model() }}</div>
-    <div>{{ form.source_prompt.label }} {{ form.source_prompt() }}</div>
+    <div>{{ form.variant_type.label }} {{ form.variant_type(id="variant-type") }}</div>
+    <div class="translation-form-grid">
+        <div>
+            {{ form.source_model.label }} {{ form.source_model(id="source-model") }}
+            <div class="muted small translation-form-note" id="translation-model-meta">
+                {% if selected_model_metadata.api_definition %}
+                API: {{ selected_model_metadata.api_definition }}{% if selected_model_metadata.model_code %} | kod modelu: {{ selected_model_metadata.model_code }}{% endif %}
+                {% else %}
+                Wybrany model nie ma skonfigurowanej definicji API.
+                {% endif %}
+            </div>
+        </div>
+        <div>{{ form.source_prompt.label }} {{ form.source_prompt(id="source-prompt") }}</div>
+    </div>
     <div>{{ form.label.label }} {{ form.label() }}</div>
-    <div>{{ form.content.label }} {{ form.content() }}</div>
+    <div>
+        {{ form.content.label }} {{ form.content(id="translation-content") }}
+        <div class="muted small translation-form-note">Automatyczne tłumaczenie korzysta z pola „Tekst źródłowy” dokumentu.</div>
+    </div>
+    <div id="translation-auto-status" class="translation-status-box muted small">
+        {% if document.original_text and document.original_text.strip() %}
+        Wybierz model z obsługą API, aby wygenerować tłumaczenie automatycznie.
+        {% else %}
+        Ten dokument nie ma jeszcze tekstu źródłowego do przetłumaczenia.
+        {% endif %}
+    </div>
     <div class="actions">
+        {{ form.translate_submit(class_="btn", id="translate-submit-button", type="button", disabled=not (selected_model_metadata.supports_auto_translation and document.original_text and document.original_text.strip())) }}
         {{ form.submit(class_="btn btn-primary") }}
         <a class="btn" href="{{ cancel_url }}">Anuluj</a>
     </div>
 </form>
+<script>
+const translationModelMetadata = {{ translation_model_metadata|tojson }};
+
+(function() {
+    const form = document.getElementById("translation-variant-form");
+    const variantTypeSelect = document.getElementById("variant-type");
+    const modelSelect = document.getElementById("source-model");
+    const promptSelect = document.getElementById("source-prompt");
+    const contentField = document.getElementById("translation-content");
+    const statusBox = document.getElementById("translation-auto-status");
+    const metaBox = document.getElementById("translation-model-meta");
+    const autoButton = document.getElementById("translate-submit-button");
+    const sourceToolField = document.getElementById("auto_source_tool");
+    const hasSourceText = {{ 'true' if document.original_text and document.original_text.strip() else 'false' }};
+
+    if (!form || !variantTypeSelect || !modelSelect || !promptSelect || !contentField || !statusBox || !autoButton || !sourceToolField) {
+        return;
+    }
+
+    function isReferenceVariant() {
+        return variantTypeSelect.value === "reference";
+    }
+
+    function selectedMetadata() {
+        return translationModelMetadata[modelSelect.value] || {
+            api_definition: null,
+            model_code: null,
+            supports_auto_translation: false,
+        };
+    }
+
+    function modelUsesPrompt(metadata) {
+        return metadata.api_definition === "gemini-api" || metadata.api_definition === "openai-api";
+    }
+
+    function refreshAutoTranslateState(statusMessage = null, isError = false, clearSourceTool = false) {
+        const referenceVariant = isReferenceVariant();
+        const metadata = selectedMetadata();
+        if (metadata.api_definition) {
+            metaBox.textContent = metadata.model_code
+                ? `API: ${metadata.api_definition} | kod modelu: ${metadata.model_code}`
+                : `API: ${metadata.api_definition}`;
+        } else {
+            metaBox.textContent = "Wybrany model nie ma skonfigurowanej definicji API.";
+        }
+
+        if (clearSourceTool) {
+            sourceToolField.value = "";
+        }
+        const usesPrompt = modelUsesPrompt(metadata);
+        modelSelect.disabled = referenceVariant;
+        promptSelect.disabled = referenceVariant || !usesPrompt;
+        if (referenceVariant || !usesPrompt) {
+            promptSelect.value = "";
+        }
+        autoButton.disabled = referenceVariant || !hasSourceText || !metadata.supports_auto_translation;
+        if (statusMessage) {
+            statusBox.textContent = statusMessage;
+            statusBox.classList.toggle("error", isError);
+            return;
+        }
+        if (referenceVariant) {
+            statusBox.textContent = "Wariant referencyjny jest tłumaczeniem ręcznym, więc nie używa modelu, promptu ani automatycznego tłumaczenia.";
+            statusBox.classList.remove("error");
+            return;
+        }
+        if (usesPrompt && !metadata.supports_auto_translation) {
+            statusBox.textContent = "Dla tego modelu można ustawić prompt, ale automatyczne tłumaczenie nie jest jeszcze zaimplementowane.";
+            statusBox.classList.remove("error");
+            return;
+        }
+        if (!usesPrompt && (metadata.api_definition === "deepl-api" || metadata.api_definition === "google-translate")) {
+            statusBox.textContent = "Wybrany silnik tłumaczenia działa bez promptu.";
+            statusBox.classList.remove("error");
+            return;
+        }
+        if (!hasSourceText) {
+            statusBox.textContent = "Ten dokument nie ma jeszcze tekstu źródłowego do przetłumaczenia.";
+            statusBox.classList.remove("error");
+            return;
+        }
+        if (!metadata.supports_auto_translation) {
+            statusBox.textContent = "Wybrany model nie obsługuje jeszcze automatycznego tłumaczenia.";
+            statusBox.classList.remove("error");
+            return;
+        }
+        statusBox.textContent = "Model jest gotowy do wygenerowania tłumaczenia.";
+        statusBox.classList.remove("error");
+    }
+
+    variantTypeSelect.addEventListener("change", () => {
+        if (isReferenceVariant()) {
+            modelSelect.value = "";
+            promptSelect.value = "";
+            sourceToolField.value = "";
+        }
+        refreshAutoTranslateState(null, false, true);
+    });
+    modelSelect.addEventListener("change", () => refreshAutoTranslateState(null, false, true));
+    refreshAutoTranslateState();
+
+    form.addEventListener("submit", () => {
+        if (isReferenceVariant()) {
+            modelSelect.disabled = false;
+            promptSelect.disabled = false;
+            modelSelect.value = "";
+            promptSelect.value = "";
+            sourceToolField.value = "";
+        }
+    });
+
+    autoButton.addEventListener("click", async () => {
+        if (autoButton.disabled) {
+            return;
+        }
+
+        autoButton.disabled = true;
+        statusBox.textContent = "Generowanie tłumaczenia trwa.";
+        statusBox.classList.remove("error");
+
+        try {
+            const response = await fetch(form.dataset.autoTranslateUrl, {
+                method: "POST",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: new FormData(form),
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || "Nie udało się wygenerować tłumaczenia.");
+            }
+            contentField.value = payload.content || "";
+            sourceToolField.value = payload.source_tool || "";
+            refreshAutoTranslateState("Tłumaczenie zostało wygenerowane i wpisane do pola Treść.", false);
+        } catch (error) {
+            refreshAutoTranslateState(error.message || "Nie udało się wygenerować tłumaczenia.", true);
+        } finally {
+            autoButton.disabled = !hasSourceText || !selectedMetadata().supports_auto_translation;
+        }
+    });
+})();
+</script>
 {% endblock %}

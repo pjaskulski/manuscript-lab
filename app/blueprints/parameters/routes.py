@@ -9,6 +9,7 @@ from ...services.model_registry import (
     MODEL_SCOPE_LABELS,
     MODEL_SCOPE_TRANSLATION,
 )
+from ...services.translation_provider import SUPPORTED_AUTO_TRANSLATION_APIS
 from .forms import ParameterModelForm, ParameterPromptForm
 
 parameters_bp = Blueprint("parameters", __name__, template_folder="templates")
@@ -41,14 +42,13 @@ def index():
             if sort_dir == "asc"
             else (ParameterModel.name.desc(), ParameterModel.id.asc())
         )
+        query = ParameterModel.query.filter_by(scope=scope)
+        if scope == MODEL_SCOPE_TRANSLATION:
+            query = query.filter(ParameterModel.name != MANUAL_MODEL_NAME)
         groups[scope] = {
             "label": label,
             "sort_dir": sort_dir,
-            "entries": (
-                ParameterModel.query.filter_by(scope=scope)
-                .order_by(*order)
-                .all()
-            ),
+            "entries": query.order_by(*order).all(),
         }
     return render_template(
         "parameters/index.html",
@@ -70,16 +70,33 @@ def index():
 def new_model(scope: str):
     scope = _get_scope_or_404(scope)
     form = ParameterModelForm()
+    _configure_model_form(form, scope)
     cancel_url = url_for("parameters.index")
     if form.validate_on_submit():
         name = (form.name.data or "").strip()
+        api_definition = _normalize_api_definition(form.api_definition.data if scope == MODEL_SCOPE_TRANSLATION else None)
+        model_code = _normalize_model_code(
+            form.model_code.data if scope == MODEL_SCOPE_TRANSLATION else None,
+            api_definition=api_definition,
+        )
         exists = ParameterModel.query.filter_by(scope=scope, name=name).first()
         if not name:
             flash("Nazwa modelu nie może być pusta.", "warning")
         elif exists is not None:
             flash("Taki model już istnieje w tym słowniku.", "warning")
+        elif api_definition and api_definition not in SUPPORTED_AUTO_TRANSLATION_APIS:
+            flash("Wybrano nieobsługiwaną definicję API.", "warning")
+        elif api_definition in {"gemini-api", "openai-api"} and not model_code:
+            flash("Dla modeli Gemini i OpenAI podaj kod modelu.", "warning")
         else:
-            db.session.add(ParameterModel(scope=scope, name=name))
+            db.session.add(
+                ParameterModel(
+                    scope=scope,
+                    name=name,
+                    api_definition=api_definition,
+                    model_code=model_code,
+                )
+            )
             db.session.commit()
             flash("Dodano model do słownika.", "success")
             return redirect(url_for("parameters.index"))
@@ -87,6 +104,7 @@ def new_model(scope: str):
         "parameters/form.html",
         form=form,
         title=f"Nowy model: {MODEL_SCOPE_LABELS[scope]}",
+        scope=scope,
         scope_label=MODEL_SCOPE_LABELS[scope],
         cancel_url=cancel_url,
     )
@@ -96,12 +114,18 @@ def new_model(scope: str):
 def edit_model(model_id: int):
     model = ParameterModel.query.get_or_404(model_id)
     form = ParameterModelForm(obj=model)
+    _configure_model_form(form, model.scope)
     cancel_url = url_for("parameters.index")
     if request.method == "GET":
         bind_version_token(form, model)
     if form.validate_on_submit():
         ensure_version_token_matches(form, model)
         name = (form.name.data or "").strip()
+        api_definition = _normalize_api_definition(form.api_definition.data if model.scope == MODEL_SCOPE_TRANSLATION else None)
+        model_code = _normalize_model_code(
+            form.model_code.data if model.scope == MODEL_SCOPE_TRANSLATION else None,
+            api_definition=api_definition,
+        )
         exists = (
             ParameterModel.query.filter_by(scope=model.scope, name=name)
             .filter(ParameterModel.id != model.id)
@@ -111,8 +135,18 @@ def edit_model(model_id: int):
             flash("Nazwa modelu nie może być pusta.", "warning")
         elif exists is not None:
             flash("Taki model już istnieje w tym słowniku.", "warning")
+        elif api_definition and api_definition not in SUPPORTED_AUTO_TRANSLATION_APIS:
+            flash("Wybrano nieobsługiwaną definicję API.", "warning")
+        elif api_definition in {"gemini-api", "openai-api"} and not model_code:
+            flash("Dla modeli Gemini i OpenAI podaj kod modelu.", "warning")
         else:
             model.name = name
+            if model.scope == MODEL_SCOPE_TRANSLATION:
+                model.api_definition = api_definition
+                model.model_code = model_code
+            else:
+                model.api_definition = None
+                model.model_code = None
             db.session.commit()
             flash("Zapisano model słownikowy.", "success")
             return redirect(url_for("parameters.index"))
@@ -120,6 +154,7 @@ def edit_model(model_id: int):
         "parameters/form.html",
         form=form,
         title=f"Edycja modelu: {MODEL_SCOPE_LABELS[model.scope]}",
+        scope=model.scope,
         scope_label=MODEL_SCOPE_LABELS[model.scope],
         cancel_url=cancel_url,
     )
@@ -236,3 +271,23 @@ def delete_prompt(prompt_id: int):
     db.session.commit()
     flash("Usunięto prompt ze słownika.", "success")
     return redirect(url_for("parameters.index"))
+
+
+def _configure_model_form(form: ParameterModelForm, scope: str) -> None:
+    if scope != MODEL_SCOPE_TRANSLATION:
+        form.api_definition.choices = [("", "- nie dotyczy -")]
+        if not form.is_submitted():
+            form.api_definition.data = ""
+            form.model_code.data = ""
+
+
+def _normalize_api_definition(value: str | None) -> str | None:
+    normalized = (value or "").strip()
+    return normalized or None
+
+
+def _normalize_model_code(value: str | None, *, api_definition: str | None = None) -> str | None:
+    if api_definition not in {"gemini-api", "openai-api"}:
+        return None
+    normalized = (value or "").strip()
+    return normalized or None

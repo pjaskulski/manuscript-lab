@@ -46,6 +46,24 @@ class TranslationVariant(TimestampMixin, db.Model):
             return f"{source} / prompt: {prompt}"
         return source or (f"prompt: {prompt}" if prompt else None)
 
+    @property
+    def note_display(self) -> str | None:
+        note = (self.label or "").strip()
+        return note or None
+
+    @property
+    def source_summary_with_note(self) -> str | None:
+        summary = self.source_summary
+        note = self.note_display
+        if summary and note:
+            return f"{summary} / uwagi: {note}"
+        return summary or (f"uwagi: {note}" if note else None)
+
+    @property
+    def selection_display(self) -> str:
+        summary = self.source_summary_with_note or self.source_summary or self.note_display or "-"
+        return f"#{self.id} | {summary} | {self.variant_type}"
+
     def __repr__(self):
         return f"<TranslationVariant {self.id} {self.variant_type!r}>"
 

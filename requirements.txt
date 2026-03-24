@@ -11,3 +11,5 @@ python-dotenv==1.0.1
 jiwer==3.0.4
 sacrebleu==2.4.3
 Pillow==11.1.0
+deepl==1.22.0
+googletrans==4.0.2

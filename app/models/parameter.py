@@ -11,6 +11,8 @@ class ParameterModel(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     scope = db.Column(db.String(32), nullable=False)
     name = db.Column(db.String(128), nullable=False)
+    api_definition = db.Column(db.String(64), nullable=True)
+    model_code = db.Column(db.String(128), nullable=True)
 
     def __repr__(self):
         return f"<ParameterModel {self.scope!r} {self.name!r}>"

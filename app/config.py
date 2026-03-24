@@ -14,8 +14,12 @@ INSTANCE_DIR = BASE_DIR / "instance"
 class Config:
     DEFAULT_MAX_CONTENT_LENGTH = 250 * 1024 * 1024
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+    DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     GEMINI_ALIGNMENT_MODEL = os.environ.get("GEMINI_ALIGNMENT_MODEL", "gemini-3.1-pro-preview")
+    OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+    TRANSLATION_SOURCE_LANGUAGE = os.environ.get("TRANSLATION_SOURCE_LANGUAGE")
+    TRANSLATION_TARGET_LANGUAGE = os.environ.get("TRANSLATION_TARGET_LANGUAGE", "PL")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
         f"sqlite:///{(INSTANCE_DIR / 'app.db').as_posix()}",

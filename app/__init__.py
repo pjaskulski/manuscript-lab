@@ -76,6 +76,63 @@ def _documents_table_sql() -> str:
     return (row or "").lower()
 
 
+def _table_sql(table_name: str) -> str:
+    with db.engine.begin() as connection:
+        row = connection.execute(
+            text("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = :name"),
+            {"name": table_name},
+        ).scalar()
+    return row or ""
+
+
+def _rebuild_sqlite_table_with_updated_references(
+    table_name: str,
+    *,
+    old_reference: str,
+    new_reference: str,
+) -> None:
+    create_sql = _table_sql(table_name)
+    if not create_sql or old_reference not in create_sql:
+        return
+
+    with db.engine.begin() as connection:
+        columns = [
+            row[1]
+            for row in connection.exec_driver_sql(f"PRAGMA table_info({table_name})").fetchall()
+        ]
+        column_list = ", ".join(columns)
+        temp_table_name = f"{table_name}__repair_old"
+        repaired_create_sql = create_sql.replace(old_reference, new_reference)
+
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.exec_driver_sql(f"ALTER TABLE {table_name} RENAME TO {temp_table_name}")
+        connection.exec_driver_sql(repaired_create_sql)
+        connection.exec_driver_sql(
+            f"INSERT INTO {table_name} ({column_list}) SELECT {column_list} FROM {temp_table_name}"
+        )
+        connection.exec_driver_sql(f"DROP TABLE {temp_table_name}")
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+
+
+def _repair_sqlite_document_foreign_keys() -> None:
+    for table_name in ("document_scan_links", "translation_variants"):
+        _rebuild_sqlite_table_with_updated_references(
+            table_name,
+            old_reference='REFERENCES "documents__old"',
+            new_reference="REFERENCES documents",
+        )
+    _rebuild_sqlite_table_with_updated_references(
+        "translation_comparisons",
+        old_reference='REFERENCES "documents__old"',
+        new_reference="REFERENCES documents",
+    )
+    _rebuild_sqlite_table_with_updated_references(
+        "translation_comparisons",
+        old_reference='REFERENCES "translation_variants__repair_old"',
+        new_reference='REFERENCES translation_variants',
+    )
+
+
 def _ensure_sqlite_compat_schema(app: Flask) -> None:
     database_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
     if not database_uri.startswith("sqlite:///"):
@@ -88,6 +145,15 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
         if not inspector.has_table("parameter_models"):
             ParameterModel.__table__.create(bind=db.engine)
             inspector = inspect(db.engine)
+        parameter_model_columns = {column["name"] for column in inspector.get_columns("parameter_models")}
+        if "api_definition" not in parameter_model_columns:
+            with db.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE parameter_models ADD COLUMN api_definition VARCHAR(64)"))
+            parameter_model_columns.add("api_definition")
+        if "model_code" not in parameter_model_columns:
+            with db.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE parameter_models ADD COLUMN model_code VARCHAR(128)"))
+            parameter_model_columns.add("model_code")
         scan_columns = {column["name"] for column in inspector.get_columns("scans")}
         if "is_training_sample" not in scan_columns:
             with db.engine.begin() as connection:
@@ -117,6 +183,8 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
         if has_old_unique or not has_composite_unique:
             _rebuild_documents_table_for_composite_uniqueness(document_columns)
             inspector = inspect(db.engine)
+        _repair_sqlite_document_foreign_keys()
+        inspector = inspect(db.engine)
         if inspector.has_table("translation_comparisons"):
             comparison_columns = {column["name"] for column in inspector.get_columns("translation_comparisons")}
             if "chrf" not in comparison_columns:

@@ -2,7 +2,9 @@ import csv
 import io
 from collections import defaultdict
 
-from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask_wtf.csrf import validate_csrf
+from wtforms.validators import ValidationError
 from openpyxl import Workbook
 from sqlalchemy.orm import joinedload
 
@@ -16,11 +18,13 @@ from ...services.bleu_metrics import (
     compute_corpus_chrf,
 )
 from ...services.model_registry import (
-    MANUAL_MODEL_NAME,
     MODEL_SCOPE_TRANSLATION,
+    get_model_entries,
+    get_model_entry,
     get_model_choices,
     get_prompt_choices,
 )
+from ...services.translation_provider import TranslationProviderError, supports_auto_translation, translate_document_text
 from .forms import TranslationCompareForm, TranslationVariantForm
 
 translations_bp = Blueprint("translations", __name__, template_folder="templates")
@@ -34,9 +38,14 @@ TRANSLATION_CORPUS_EXPORT_HEADERS = [
 
 
 def _configure_model_choices(form: TranslationVariantForm, current_value: str | None = None) -> None:
-    form.source_model.choices = get_model_choices(MODEL_SCOPE_TRANSLATION, current_value=current_value)
+    choices = get_model_choices(
+        MODEL_SCOPE_TRANSLATION,
+        current_value=current_value,
+        include_empty=True,
+    )
+    form.source_model.choices = [choice for choice in choices if choice[0] != "Manualnie"]
     if not form.is_submitted():
-        form.source_model.data = (current_value or "").strip() or MANUAL_MODEL_NAME
+        form.source_model.data = (current_value or "").strip()
 
 
 def _configure_prompt_choices(form: TranslationVariantForm, current_value: str | None = None) -> None:
@@ -46,8 +55,9 @@ def _configure_prompt_choices(form: TranslationVariantForm, current_value: str |
 
 
 def _variant_label(variant: TranslationVariant) -> str:
-    if variant.source_summary:
-        return f"{variant.source_summary} ({variant.variant_type})"
+    summary = variant.source_summary_with_note or variant.source_summary
+    if summary:
+        return f"{summary} ({variant.variant_type})"
     return variant.variant_type
 
 
@@ -132,6 +142,56 @@ def _invalidate_variant_comparisons(variant: TranslationVariant) -> None:
         comparison.chrf = None
         seen_comparison_ids.add(comparison.id)
 
+
+def _translation_model_metadata() -> dict[str, dict[str, str | bool | None]]:
+    metadata: dict[str, dict[str, str | bool | None]] = {}
+    for entry in get_model_entries(MODEL_SCOPE_TRANSLATION):
+        metadata[entry.name] = {
+            "api_definition": (entry.api_definition or "").strip() or None,
+            "model_code": (entry.model_code or "").strip() or None,
+            "supports_auto_translation": supports_auto_translation(entry),
+        }
+    return metadata
+
+
+def _selected_model_metadata(selected_name: str | None) -> dict[str, str | bool | None]:
+    metadata = _translation_model_metadata()
+    return metadata.get((selected_name or "").strip(), {"api_definition": None, "model_code": None, "supports_auto_translation": False})
+
+
+def _model_uses_prompt(model_name: str | None) -> bool:
+    selected_model = get_model_entry(MODEL_SCOPE_TRANSLATION, model_name)
+    if selected_model is None:
+        return False
+    api_definition = (selected_model.api_definition or "").strip()
+    return api_definition in {"gemini-api", "openai-api"}
+
+
+def _normalize_variant_form(form: TranslationVariantForm) -> None:
+    form.variant_type.data = (form.variant_type.data or "").strip() or "reference"
+    source_model = (form.source_model.data or "").strip()
+    if form.variant_type.data == "reference":
+        source_model = ""
+    form.source_model.data = source_model
+    form.source_prompt.data = (form.source_prompt.data or "").strip()
+    form.auto_source_tool.data = (form.auto_source_tool.data or "").strip()
+    form.label.data = (form.label.data or "").strip()
+    form.content.data = form.content.data or ""
+    if form.variant_type.data == "reference" or not _model_uses_prompt(form.source_model.data):
+        form.source_prompt.data = ""
+    if form.variant_type.data == "reference":
+        form.auto_source_tool.data = ""
+
+
+def _resolved_source_tool(form: TranslationVariantForm) -> str | None:
+    if form.variant_type.data == "reference":
+        return None
+    selected_model = get_model_entry(MODEL_SCOPE_TRANSLATION, form.source_model.data)
+    if selected_model is None or not supports_auto_translation(selected_model):
+        return None
+    source_tool = (form.auto_source_tool.data or "").strip()
+    return source_tool or None
+
 @translations_bp.route("/document/<int:document_id>/new", methods=["GET", "POST"])
 def new_variant(document_id: int):
     document = Document.query.get_or_404(document_id)
@@ -140,9 +200,11 @@ def new_variant(document_id: int):
     _configure_prompt_choices(form)
     cancel_url = url_for("documents.document_detail", document_id=document.id)
     if form.validate_on_submit():
+        _normalize_variant_form(form)
         variant = TranslationVariant(
             document=document,
             variant_type=form.variant_type.data,
+            source_tool=_resolved_source_tool(form),
             source_model=(form.source_model.data or "").strip() or None,
             source_prompt=(form.source_prompt.data or "").strip() or None,
             label=form.label.data,
@@ -156,6 +218,8 @@ def new_variant(document_id: int):
         "translations/form.html",
         form=form,
         document=document,
+        translation_model_metadata=_translation_model_metadata(),
+        selected_model_metadata=_selected_model_metadata(form.source_model.data),
         title="Nowy wariant tłumaczenia",
         cancel_url=cancel_url,
     )
@@ -170,10 +234,12 @@ def edit_variant(variant_id: int):
     cancel_url = url_for("documents.document_detail", document_id=variant.document_id)
     if request.method == "GET":
         bind_version_token(form, variant)
+        form.auto_source_tool.data = (variant.source_tool or "").strip()
     if form.validate_on_submit():
         ensure_version_token_matches(form, variant)
+        _normalize_variant_form(form)
         form.populate_obj(variant)
-        variant.source_tool = None
+        variant.source_tool = _resolved_source_tool(form)
         variant.source_model = (form.source_model.data or "").strip() or None
         variant.source_prompt = (form.source_prompt.data or "").strip() or None
         _invalidate_variant_comparisons(variant)
@@ -184,8 +250,50 @@ def edit_variant(variant_id: int):
         "translations/form.html",
         form=form,
         document=variant.document,
+        translation_model_metadata=_translation_model_metadata(),
+        selected_model_metadata=_selected_model_metadata(form.source_model.data),
         title="Edycja wariantu tłumaczenia",
         cancel_url=cancel_url,
+    )
+
+
+@translations_bp.route("/document/<int:document_id>/auto-translate", methods=["POST"])
+def auto_translate_document(document_id: int):
+    document = Document.query.get_or_404(document_id)
+    form = TranslationVariantForm()
+    _configure_model_choices(form)
+    _configure_prompt_choices(form)
+    try:
+        validate_csrf(form.csrf_token.data)
+    except ValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    selected_model = get_model_entry(MODEL_SCOPE_TRANSLATION, form.source_model.data)
+    if selected_model is None:
+        return jsonify({"error": "Wybrany model tłumaczenia nie istnieje."}), 400
+    if not supports_auto_translation(selected_model):
+        return jsonify({"error": "Wybrany model nie obsługuje automatycznego tłumaczenia."}), 400
+
+    try:
+        result = translate_document_text(
+            model=selected_model,
+            source_text=document.original_text or "",
+            prompt_name=form.source_prompt.data,
+        )
+    except TranslationProviderError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        current_app.logger.exception("Automatic translation failed for document_id=%s", document_id)
+        return jsonify({"error": "Wystąpił nieoczekiwany błąd podczas tłumaczenia."}), 500
+
+    return jsonify(
+        {
+            "content": result.text,
+            "source_tool": result.source_tool,
+            "source_model": selected_model.name,
+            "api_definition": selected_model.api_definition,
+            "model_code": selected_model.model_code,
+        }
     )
 
 
@@ -209,7 +317,7 @@ def compare_variants(document_id: int):
         return redirect(url_for("documents.document_detail", document_id=document.id))
 
     form = TranslationCompareForm()
-    choices = [(v.id, f"{v.source_summary or v.variant_type} | {v.variant_type}") for v in variants]
+    choices = [(v.id, v.selection_display) for v in variants]
     form.reference_variant_id.choices = choices
     form.candidate_variant_id.choices = choices
 
@@ -238,7 +346,22 @@ def view_comparison(comparison_id: int):
     if comparison.chrf is None:
         comparison.chrf = compute_chrf(comparison.reference_variant.content, comparison.candidate_variant.content)
         db.session.commit()
-    return render_template("translations/comparison_detail.html", comparison=comparison)
+    back_url = request.args.get("next") or url_for("documents.document_detail", document_id=comparison.document_id)
+    return render_template(
+        "translations/comparison_detail.html",
+        comparison=comparison,
+        back_url=back_url,
+    )
+
+
+@translations_bp.route("/comparisons/<int:comparison_id>/delete", methods=["POST"])
+def delete_comparison(comparison_id: int):
+    comparison = TranslationComparison.query.get_or_404(comparison_id)
+    document_id = comparison.document_id
+    db.session.delete(comparison)
+    db.session.commit()
+    flash("Usunięto porównanie tłumaczeń.", "success")
+    return redirect(request.form.get("next") or url_for("documents.document_detail", document_id=document_id))
 
 
 @translations_bp.route("/corpus-report")

@@ -7,6 +7,8 @@
     .document-header-title { margin-bottom: .35rem; }
     .document-header-name { font-size: 1.25rem; font-weight: 600; line-height: 1.35; }
     .document-header-actions { justify-content: flex-end; margin-top: .85rem; }
+    .document-table-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: nowrap; }
+    .document-table-actions form { margin: 0; }
 </style>
 <script>
 function confirmRebuildOriginalText(form) {
@@ -128,11 +130,11 @@ function confirmRebuildOriginalText(form) {
             <tr>
                 <td>{{ variant.id }}</td>
                 <td>{{ variant.variant_type }}</td>
-                <td>{{ variant.source_display or '-' }}</td>
+                <td>{{ variant.source_summary_with_note or variant.source_display or '-' }}</td>
                 <td>{{ variant.source_prompt or '-' }}</td>
                 <td>{{ variant.label or '-' }}</td>
                 <td>
-                    <div class="actions">
+                    <div class="document-table-actions">
                         <a class="btn" href="{{ url_for('translations.edit_variant', variant_id=variant.id) }}">Edytuj</a>
                         <form method="post" action="{{ url_for('translations.delete_variant', variant_id=variant.id) }}" onsubmit="return confirm('Usunąć wariant?');">
                             <button class="btn btn-danger" type="submit">Usuń</button>
@@ -167,11 +169,19 @@ function confirmRebuildOriginalText(form) {
             {% for cmp in comparisons %}
             <tr>
                 <td>{{ cmp.id }}</td>
-                <td>{{ cmp.reference_variant.source_summary or cmp.reference_variant.variant_type }}</td>
-                <td>{{ cmp.candidate_variant.source_summary or cmp.candidate_variant.variant_type }}</td>
+                <td>{{ cmp.reference_variant.source_summary_with_note or cmp.reference_variant.source_summary or cmp.reference_variant.variant_type }}</td>
+                <td>{{ cmp.candidate_variant.source_summary_with_note or cmp.candidate_variant.source_summary or cmp.candidate_variant.variant_type }}</td>
                 <td>{{ '%.4f'|format(cmp.bleu or 0) }}</td>
                 <td>{{ '%.4f'|format(cmp.chrf or 0) }}</td>
-                <td><a class="btn" href="{{ url_for('translations.view_comparison', comparison_id=cmp.id) }}">Szczegóły</a></td>
+                <td>
+                    <div class="document-table-actions">
+                        <a class="btn" href="{{ url_for('translations.view_comparison', comparison_id=cmp.id, next=request.full_path) }}">Szczegóły</a>
+                        <form method="post" action="{{ url_for('translations.delete_comparison', comparison_id=cmp.id) }}" onsubmit="return confirm('Usunąć porównanie tłumaczeń?');">
+                            <input type="hidden" name="next" value="{{ request.full_path }}">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
             </tr>
             {% else %}
             <tr><td colspan="6">Brak porównań.</td></tr>

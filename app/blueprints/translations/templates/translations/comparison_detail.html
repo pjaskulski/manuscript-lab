@@ -3,7 +3,13 @@
 {% block content %}
 <div class="actions" style="justify-content: space-between; margin-bottom: 1rem;">
     <h1>Porównanie tłumaczeń #{{ comparison.id }}</h1>
-    <a class="btn" href="{{ url_for('documents.document_detail', document_id=comparison.document.id) }}">Wróć do dokumentu</a>
+    <div class="actions">
+        <a class="btn" href="{{ back_url }}">Wróć</a>
+        <form method="post" action="{{ url_for('translations.delete_comparison', comparison_id=comparison.id) }}" onsubmit="return confirm('Usunąć porównanie tłumaczeń?');">
+            <input type="hidden" name="next" value="{{ back_url }}">
+            <button class="btn btn-danger" type="submit">Usuń porównanie</button>
+        </form>
+    </div>
 </div>
 <p><strong>Dokument:</strong> <a href="{{ url_for('documents.document_detail', document_id=comparison.document.id) }}">#{{ comparison.document.id }} — {{ comparison.document.title }}</a></p>
 <div class="grid grid-2">
@@ -15,8 +21,8 @@
     </div>
     <div class="card">
         <h2>Warianty</h2>
-        <p><strong>Wzorzec:</strong> {{ comparison.reference_variant.source_summary or comparison.reference_variant.variant_type }}</p>
-        <p><strong>Porównywany:</strong> {{ comparison.candidate_variant.source_summary or comparison.candidate_variant.variant_type }}</p>
+        <p><strong>Wzorzec:</strong> {{ comparison.reference_variant.source_summary_with_note or comparison.reference_variant.source_summary or comparison.reference_variant.variant_type }}</p>
+        <p><strong>Porównywany:</strong> {{ comparison.candidate_variant.source_summary_with_note or comparison.candidate_variant.source_summary or comparison.candidate_variant.variant_type }}</p>
     </div>
 </div>
 <div class="grid grid-2" style="margin-top: 1rem;">

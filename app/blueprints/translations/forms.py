@@ -11,11 +11,13 @@ VARIANT_TYPES = [
 
 class TranslationVariantForm(FlaskForm):
     version_token = HiddenField()
+    auto_source_tool = HiddenField()
     variant_type = SelectField("Typ wariantu", choices=VARIANT_TYPES, validators=[DataRequired()])
-    source_model = SelectField("Model", choices=[], validators=[DataRequired()])
+    source_model = SelectField("Model", choices=[], validators=[Optional()])
     source_prompt = SelectField("Prompt", choices=[], validators=[Optional()])
     label = StringField("Uwagi", validators=[Optional()])
     content = TextAreaField("Treść", validators=[DataRequired()])
+    translate_submit = SubmitField("Przetłumacz automatycznie")
     submit = SubmitField("Zapisz")
 
 

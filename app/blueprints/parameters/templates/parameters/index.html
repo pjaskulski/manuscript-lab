@@ -5,6 +5,9 @@
     .prompt-actions-col { width: 1%; white-space: nowrap; }
     .prompt-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: nowrap; }
     .prompt-actions form { margin: 0; }
+    .parameter-actions-col { width: 1%; white-space: nowrap; }
+    .parameter-actions { display: flex; gap: .4rem; align-items: center; flex-wrap: nowrap; }
+    .parameter-actions form { margin: 0; }
 </style>
 {% endblock %}
 {% block content %}
@@ -23,15 +26,15 @@
             <thead>
                 <tr>
                     <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir='desc' if groups[htr_scope].sort_dir == 'asc' else 'asc', translation_sort_dir=groups[translation_scope].sort_dir, prompt_sort_dir=prompt_sort_dir) }}">Model{% if groups[htr_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[htr_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                    <th>Akcje</th>
+                    <th class="parameter-actions-col">Akcje</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entry in groups[htr_scope].entries %}
                 <tr>
                     <td>{{ entry.name }}</td>
-                    <td>
-                        <div class="actions">
+                    <td class="parameter-actions-col">
+                        <div class="parameter-actions">
                             <a class="btn" href="{{ url_for('parameters.edit_model', model_id=entry.id) }}">Edytuj</a>
                             <form method="post" action="{{ url_for('parameters.delete_model', model_id=entry.id) }}" onsubmit="return confirm('Usunąć model ze słownika?');">
                                 <button class="btn btn-danger" type="submit" {% if entry.name == manual_model_name %}disabled{% endif %}>Usuń</button>
@@ -55,15 +58,19 @@
             <thead>
                 <tr>
                     <th><a class="sort-link" href="{{ url_for('parameters.index', htr_sort_dir=groups[htr_scope].sort_dir, translation_sort_dir='desc' if groups[translation_scope].sort_dir == 'asc' else 'asc', prompt_sort_dir=prompt_sort_dir) }}">Model{% if groups[translation_scope].sort_dir %} <span class="sort-arrow">{{ '↑' if groups[translation_scope].sort_dir == 'asc' else '↓' }}</span>{% endif %}</a></th>
-                    <th>Akcje</th>
+                    <th>API</th>
+                    <th>Kod modelu</th>
+                    <th class="parameter-actions-col">Akcje</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entry in groups[translation_scope].entries %}
                 <tr>
                     <td>{{ entry.name }}</td>
-                    <td>
-                        <div class="actions">
+                    <td>{{ entry.api_definition or '-' }}</td>
+                    <td>{{ entry.model_code or '-' }}</td>
+                    <td class="parameter-actions-col">
+                        <div class="parameter-actions">
                             <a class="btn" href="{{ url_for('parameters.edit_model', model_id=entry.id) }}">Edytuj</a>
                             <form method="post" action="{{ url_for('parameters.delete_model', model_id=entry.id) }}" onsubmit="return confirm('Usunąć model ze słownika?');">
                                 <button class="btn btn-danger" type="submit" {% if entry.name == manual_model_name %}disabled{% endif %}>Usuń</button>
@@ -72,7 +79,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="2">Brak modeli.</td></tr>
+                <tr><td colspan="4">Brak modeli.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
