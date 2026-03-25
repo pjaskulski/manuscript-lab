@@ -230,3 +230,4 @@ README.md
 ## Uwagi
 - obrazy skanów są zapisywane na dysku w `instance/uploads/scans/`, w podkatalogu `thumbs` generowane są miniatury skanów do wyświetlania w widoku skanu 
 - baza SQLite - jest wystarczająca dla prototypu i małego zespołu, dla dużego projektu można pomyśleć o zmianie na np. PostgreSQL.
+- konwersja podręcznika użytkownika z formatu md na pdf: `pandoc manual.md -o manual.pdf --pdf-engine=xelatex --toc -V colorlinks=true -V geometry:margin=2cm`
