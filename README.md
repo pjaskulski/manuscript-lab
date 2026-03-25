@@ -55,6 +55,8 @@ Projekt przygotowywany z użyciem AI (Codex 5.4)
 
 ![screeenshot](doc/13.png)
 
+![screeenshot](doc/18.png)
+
 ![screeenshot](doc/14.png)
 
 ![screeenshot](doc/15.png)
@@ -113,7 +115,7 @@ Jednorazowe wygenerowanie miniaturek dla już istniejących skanów:
 flask --app run.py generate-scan-thumbnails
 ```
 
-Jeśli chcesz przegenerować je wszystkie od nowa:
+Generowanie wszystkie od nowa:
 
 ```bash
 flask --app run.py generate-scan-thumbnails --force
