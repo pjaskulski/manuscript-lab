@@ -95,6 +95,22 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
         return metadata.api_definition === "gemini-api" || metadata.api_definition === "openai-api";
     }
 
+    function selectedApiLabel(metadata) {
+        if (metadata.api_definition === "gemini-api") {
+            return "Gemini";
+        }
+        if (metadata.api_definition === "openai-api") {
+            return "OpenAI";
+        }
+        if (metadata.api_definition === "deepl-api") {
+            return "DeepL";
+        }
+        if (metadata.api_definition === "google-translate") {
+            return "Google Translate";
+        }
+        return "Wybrany model";
+    }
+
     function formatDuration(seconds) {
         const totalSeconds = Math.max(0, Math.floor(seconds));
         const minutes = Math.floor(totalSeconds / 60);
@@ -133,13 +149,14 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
     function startProgressTimer(metadata) {
         stopProgressTimer();
         translationStartedAt = Date.now();
+        const apiLabel = selectedApiLabel(metadata);
         const promptInfo = modelUsesPrompt(metadata) && promptSelect.value ? ` | prompt: ${promptSelect.value}` : "";
         const metaPrefix = `Model: ${modelSelect.value || "-"}${promptInfo} | skala: ${estimatedComplexityLabel()} (${sourceTextLength} znakow)`;
         const update = () => {
             const elapsedSeconds = (Date.now() - translationStartedAt) / 1000;
             setStatus(
                 "Trwa tlumaczenie",
-                "Gemini przetwarza dokument. Operacja moze potrwac dluzej przy wiekszym tekscie.",
+                `${apiLabel} przetwarza dokument. Operacja moze potrwac dluzej przy wiekszym tekscie.`,
                 "busy",
                 `${metaPrefix} | czas: ${formatDuration(elapsedSeconds)}`
             );

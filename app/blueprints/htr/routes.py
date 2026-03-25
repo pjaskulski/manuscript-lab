@@ -395,4 +395,4 @@ def delete_comparison(comparison_id: int):
     db.session.delete(comparison)
     db.session.commit()
     flash("Usunięto porównanie HTR.", "success")
-    return redirect(url_for("scans.scan_detail", scan_id=scan_id))
+    return redirect(request.form.get("next") or url_for("scans.scan_detail", scan_id=scan_id))

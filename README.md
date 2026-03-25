@@ -135,6 +135,14 @@ GEMINI_ALIGNMENT_MODEL=gemini-3-flash-preview
 
 Po ustawieniu klucza w widoku `HTR` dla wariantu tekstu pojawia się przycisk `Dopasuj linie przez AI`, który pobiera obraz skanu i bieżący tekst z edytora, wysyła je do modelu Gemini i wstawia wynik z podziałem na wiersze z powrotem do pola edycji.
 
+Automatyczne tłumaczenie dokumentów może korzystać także z modeli OpenAI. W tym przypadku trzeba ustawić klucz API:
+
+```bash
+OPENAI_API_KEY=twoj-klucz-api
+```
+
+W słowniku parametrów tłumaczeń należy wtedy dodać model z `Definicja API = OpenAI API` oraz wpisać kod modelu, np. wybrany wariant GPT. Po tej konfiguracji przycisk `Przetłumacz automatycznie` w formularzu wariantu tłumaczenia wyśle tekst źródłowy dokumentu do OpenAI i wstawi wynik do pola `Treść`.
+
 Przykładowe pliki wdrożeniowe:
 - `deploy/manuscript-lab.service` - usługa `systemd` dla `gunicorn`,
 - `deploy/manuscript-lab.nginx.conf` - przykładowy vhost `nginx`.

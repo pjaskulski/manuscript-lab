@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from flask import current_app
 from google import genai
 from google.genai import types
+from openai import OpenAI
 
 from ..models.parameter import ParameterModel, ParameterPrompt
 
@@ -26,6 +27,7 @@ AUTO_TRANSLATION_ACTIVE_APIS = {
     TRANSLATION_API_DEEPL,
     TRANSLATION_API_GOOGLE,
     TRANSLATION_API_GEMINI,
+    TRANSLATION_API_OPENAI,
 }
 
 API_LABELS = {
@@ -90,7 +92,13 @@ def translate_document_text(
         )
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     elif api_definition == TRANSLATION_API_OPENAI:
-        raise TranslationProviderError("Automatyczne tłumaczenie przez OpenAI nie jest jeszcze zaimplementowane.")
+        started_at = time.perf_counter()
+        translated_text = _translate_with_openai(
+            text=content,
+            model_code=(model.model_code or "").strip(),
+            prompt_name=prompt_name,
+        )
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
     else:
         raise TranslationProviderError("Wybrany model nie obsługuje automatycznego tłumaczenia.")
 
@@ -150,20 +158,14 @@ def _translate_with_gemini(text: str, model_code: str, prompt_name: str | None) 
     if not model_code:
         raise TranslationProviderError("Model Gemini nie ma skonfigurowanego kodu modelu.")
 
-    prompt = _resolve_translation_prompt(prompt_name)
-    source_lang = (current_app.config.get("TRANSLATION_SOURCE_LANGUAGE") or "").strip() or "auto"
-    target_lang = (current_app.config.get("TRANSLATION_TARGET_LANGUAGE") or "PL").strip() or "PL"
+    prompt_payload = _build_translation_prompt_payload(text=text, prompt_name=prompt_name)
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=model_code,
-        contents=_build_gemini_translation_prompt(
-            text=text,
-            source_lang=source_lang,
-            target_lang=target_lang,
-            prompt=prompt,
-        ),
+        contents=prompt_payload.user_prompt,
         config=types.GenerateContentConfig(
+            system_instruction=prompt_payload.system_prompt,
             temperature=0.2,
             thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
@@ -174,6 +176,35 @@ def _translate_with_gemini(text: str, model_code: str, prompt_name: str | None) 
     if not translated_text:
         raise TranslationProviderError("Model Gemini nie zwrócił tłumaczenia.")
     return translated_text
+
+
+def _translate_with_openai(text: str, model_code: str, prompt_name: str | None) -> str:
+    api_key = (current_app.config.get("OPENAI_API_KEY") or "").strip()
+    if not api_key:
+        raise TranslationProviderError("Brak klucza OPENAI_API_KEY w konfiguracji aplikacji.")
+    if not model_code:
+        raise TranslationProviderError("Model OpenAI nie ma skonfigurowanego kodu modelu.")
+
+    prompt_payload = _build_translation_prompt_payload(text=text, prompt_name=prompt_name)
+
+    client = OpenAI(api_key=api_key)
+    response = client.responses.create(
+        model=model_code,
+        temperature=0.2,
+        instructions=prompt_payload.system_prompt,
+        input=prompt_payload.user_prompt,
+    )
+
+    translated_text = (response.output_text or "").strip()
+    if not translated_text:
+        raise TranslationProviderError("Model OpenAI nie zwrócił tłumaczenia.")
+    return translated_text
+
+
+@dataclass(slots=True)
+class TranslationPromptPayload:
+    system_prompt: str
+    user_prompt: str
 
 
 def _resolve_translation_prompt(prompt_name: str | None) -> str | None:
@@ -189,28 +220,35 @@ def _resolve_translation_prompt(prompt_name: str | None) -> str | None:
     return content
 
 
-def _build_gemini_translation_prompt(*, text: str, source_lang: str, target_lang: str, prompt: str | None) -> str:
-    instructions = [
-        "Przetlumacz ponizszy tekst wiernie i kompletnie.",
+def _build_translation_prompt_payload(*, text: str, prompt_name: str | None) -> TranslationPromptPayload:
+    prompt = _resolve_translation_prompt(prompt_name)
+    source_lang = (current_app.config.get("TRANSLATION_SOURCE_LANGUAGE") or "").strip() or "auto"
+    target_lang = (current_app.config.get("TRANSLATION_TARGET_LANGUAGE") or "PL").strip() or "PL"
+
+    system_instructions = [
+        "Jestes tlumaczem dokumentow historycznych.",
+        "Przetlumacz tekst wiernie, kompletnie i bez skracania.",
         f"Jezyk zrodlowy: {source_lang}.",
         f"Jezyk docelowy: {target_lang}.",
-        "Zachowaj podzial na akapity i wiersze, o ile nie wynika z instrukcji w promptcie inaczej.",
+        "Zachowaj podzial na akapity i wiersze, o ile instrukcje dodatkowe nie wymagaja inaczej.",
         "Nie dodawaj komentarzy, przypisow, wyjasnien ani naglowkow.",
         "Zwroc wylacznie gotowe tlumaczenie.",
     ]
     if prompt:
-        instructions.extend(
+        system_instructions.extend(
             [
                 "",
                 "Dodatkowe instrukcje:",
                 prompt,
             ]
         )
-    instructions.extend(
+    user_prompt = "\n".join(
         [
-            "",
             "Tekst do przetlumaczenia:",
             text,
         ]
     )
-    return "\n".join(instructions)
+    return TranslationPromptPayload(
+        system_prompt="\n".join(system_instructions),
+        user_prompt=user_prompt,
+    )

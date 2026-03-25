@@ -155,7 +155,15 @@
                 <td>{{ cmp.normalization_profile or '-' }}</td>
                 <td>{{ '%.2f'|format((cmp.cer or 0) * 100) }}%</td>
                 <td>{{ '%.2f'|format((cmp.wer or 0) * 100) }}%</td>
-                <td><a class="btn" href="{{ url_for('htr.view_comparison', comparison_id=cmp.id) }}">Szczegóły</a></td>
+                <td>
+                    <div class="actions">
+                        <a class="btn" href="{{ url_for('htr.view_comparison', comparison_id=cmp.id, next=request.full_path) }}">Szczegóły</a>
+                        <form method="post" action="{{ url_for('htr.delete_comparison', comparison_id=cmp.id) }}" onsubmit="return confirm('Usunąć porównanie HTR?');">
+                            <input type="hidden" name="next" value="{{ request.full_path }}">
+                            <button class="btn btn-danger" type="submit">Usuń</button>
+                        </form>
+                    </div>
+                </td>
             </tr>
             {% else %}
             <tr><td colspan="7">Brak porównań.</td></tr>
