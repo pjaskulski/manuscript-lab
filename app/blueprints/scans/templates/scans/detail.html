@@ -40,12 +40,12 @@
     </div>
     <div class="actions scan-header-actions">
         {% if previous_scan %}
-        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=previous_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">← Poprzedni</a>
+        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=previous_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, training_sample_filter=training_sample_filter, done_filter=done_filter, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">← Poprzedni</a>
         {% endif %}
         {% if next_scan %}
-        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=next_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Następny →</a>
+        <a class="btn" href="{{ url_for('scans.scan_detail', scan_id=next_scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, training_sample_filter=training_sample_filter, done_filter=done_filter, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir) }}">Następny →</a>
         {% endif %}
-        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir)) }}">Edytuj metadane</a>
+        <a class="btn" href="{{ url_for('scans.edit_scan', scan_id=scan.id, next=url_for('scans.scan_detail', scan_id=scan.id, q=q, sort_by=sort_by, sort_dir=sort_dir, training_sample_filter=training_sample_filter, done_filter=done_filter, text_sort_by=text_sort_by, text_sort_dir=text_sort_dir, comparison_sort_by=comparison_sort_by, comparison_sort_dir=comparison_sort_dir)) }}">Edytuj metadane</a>
         <a class="btn btn-primary" href="{{ url_for('htr.new_scan_text', scan_id=scan.id) }}">Dodaj tekst</a>
         <a class="btn" href="{{ url_for('htr.compare_scan_texts', scan_id=scan.id) }}">Porównaj HTR</a>
     </div>

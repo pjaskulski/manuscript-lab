@@ -222,3 +222,4 @@ instance/uploads/scans/*
 instance/app.db
 instance/*.db
 backups/
+.codex

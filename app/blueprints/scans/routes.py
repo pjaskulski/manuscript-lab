@@ -15,6 +15,8 @@ from .forms import BulkScanImportForm, MAX_BULK_IMPORT_FILES, ScanForm, ScanTrai
 
 scans_bp = Blueprint("scans", __name__, template_folder="templates")
 
+BOOLEAN_FILTER_VALUES = {"", "yes", "no"}
+
 
 def _original_scan_filename(filename: str | None) -> str | None:
     if not filename:
@@ -83,6 +85,16 @@ SCAN_SORT_FIELDS = {
         if direction == "asc"
         else (Scan.hand.desc().nullslast(), Scan.id.asc())
     ),
+    "is_training_sample": lambda direction: (
+        (Scan.is_training_sample.asc(), Scan.id.asc())
+        if direction == "asc"
+        else (Scan.is_training_sample.desc(), Scan.id.asc())
+    ),
+    "is_done": lambda direction: (
+        (Scan.is_done.asc(), Scan.id.asc())
+        if direction == "asc"
+        else (Scan.is_done.desc(), Scan.id.asc())
+    ),
     "sequence_no": lambda direction: (
         (Scan.sequence_no.asc().nullslast(), Scan.id.asc())
         if direction == "asc"
@@ -136,7 +148,16 @@ SCAN_TEXT_SORT_FIELDS = {
 }
 
 
-def _filtered_scans_query(query_text: str):
+def _normalize_boolean_filter(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    return normalized if normalized in BOOLEAN_FILTER_VALUES else ""
+
+
+def _filtered_scans_query(
+    query_text: str,
+    training_sample_filter: str = "",
+    done_filter: str = "",
+):
     query = Scan.query
     if query_text:
         like = f"%{query_text}%"
@@ -148,13 +169,34 @@ def _filtered_scans_query(query_text: str):
                 Scan.hand.ilike(like),
             )
         )
+    if training_sample_filter == "yes":
+        query = query.filter(Scan.is_training_sample.is_(True))
+    elif training_sample_filter == "no":
+        query = query.filter(Scan.is_training_sample.is_(False))
+
+    if done_filter == "yes":
+        query = query.filter(Scan.is_done.is_(True))
+    elif done_filter == "no":
+        query = query.filter(Scan.is_done.is_(False))
+
     return query
 
 
-def _scan_neighbors(scan_id: int, query_text: str, sort_by: str, sort_dir: str) -> tuple[Scan | None, Scan | None]:
+def _scan_neighbors(
+    scan_id: int,
+    query_text: str,
+    sort_by: str,
+    sort_dir: str,
+    training_sample_filter: str = "",
+    done_filter: str = "",
+) -> tuple[Scan | None, Scan | None]:
     scan_ids = [
         current_scan_id
-        for current_scan_id, in _filtered_scans_query(query_text)
+        for current_scan_id, in _filtered_scans_query(
+            query_text,
+            training_sample_filter=training_sample_filter,
+            done_filter=done_filter,
+        )
         .with_entities(Scan.id)
         .order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir))
         .all()
@@ -173,12 +215,39 @@ def list_scans():
     q = request.args.get("q", "").strip()
     sort_by = request.args.get("sort_by", "id")
     sort_dir = request.args.get("sort_dir", "asc")
+    training_sample_filter = _normalize_boolean_filter(request.args.get("training_sample_filter"))
+    done_filter = _normalize_boolean_filter(request.args.get("done_filter"))
     if sort_by not in SCAN_SORT_FIELDS:
         sort_by = "id"
     if sort_dir not in {"asc", "desc"}:
         sort_dir = "asc"
-    scans = _filtered_scans_query(q).order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir)).all()
-    return render_template("scans/list.html", scans=scans, q=q, sort_by=sort_by, sort_dir=sort_dir)
+    scans = _filtered_scans_query(
+        q,
+        training_sample_filter=training_sample_filter,
+        done_filter=done_filter,
+    ).order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir)).all()
+    scan_ids = [scan.id for scan in scans]
+    text_variant_counts = {scan_id: 0 for scan_id in scan_ids}
+    if scan_ids:
+        text_variant_counts.update(
+            dict(
+                db.session.query(ScanText.scan_id, db.func.count(ScanText.id))
+                .filter(ScanText.scan_id.in_(scan_ids))
+                .group_by(ScanText.scan_id)
+                .all()
+            )
+        )
+    return render_template(
+        "scans/list.html",
+        scans=scans,
+        text_variant_counts=text_variant_counts,
+        q=q,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        training_sample_filter=training_sample_filter,
+        done_filter=done_filter,
+        has_advanced_filters=bool(training_sample_filter or done_filter),
+    )
 
 
 @scans_bp.route("/export-training-sample", methods=["GET", "POST"])
@@ -314,6 +383,8 @@ def scan_detail(scan_id: int):
     q = request.args.get("q", "").strip()
     sort_by = request.args.get("sort_by", "id")
     sort_dir = request.args.get("sort_dir", "asc")
+    training_sample_filter = _normalize_boolean_filter(request.args.get("training_sample_filter"))
+    done_filter = _normalize_boolean_filter(request.args.get("done_filter"))
     text_sort_by = request.args.get("text_sort_by", "id")
     text_sort_dir = request.args.get("text_sort_dir", "asc")
     comparison_sort_by = request.args.get("comparison_sort_by", "id")
@@ -332,7 +403,14 @@ def scan_detail(scan_id: int):
         comparison_sort_dir = "asc"
     texts = scan.texts.order_by(*SCAN_TEXT_SORT_FIELDS[text_sort_by](text_sort_dir)).all()
     comparisons = scan.comparisons.order_by(*HTR_COMPARISON_SORT_FIELDS[comparison_sort_by](comparison_sort_dir)).all()
-    previous_scan, next_scan = _scan_neighbors(scan.id, q, sort_by, sort_dir)
+    previous_scan, next_scan = _scan_neighbors(
+        scan.id,
+        q,
+        sort_by,
+        sort_dir,
+        training_sample_filter=training_sample_filter,
+        done_filter=done_filter,
+    )
     return render_template(
         "scans/detail.html",
         scan=scan,
@@ -341,6 +419,8 @@ def scan_detail(scan_id: int):
         q=q,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        training_sample_filter=training_sample_filter,
+        done_filter=done_filter,
         previous_scan=previous_scan,
         next_scan=next_scan,
         text_sort_by=text_sort_by,
