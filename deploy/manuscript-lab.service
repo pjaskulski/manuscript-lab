@@ -9,7 +9,8 @@ Group=www-data
 WorkingDirectory=/srv/manuscript-lab
 Environment="PATH=/srv/manuscript-lab/venv/bin"
 Environment="SECRET_KEY=zmien-to-na-losowy-sekret"
-ExecStart=/srv/manuscript-lab/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --access-logfile - --error-logfile - run:app
+Environment="TRANSLATION_PROVIDER_TIMEOUT_SECONDS=120"
+ExecStart=/srv/manuscript-lab/venv/bin/gunicorn --workers 2 --timeout 180 --bind 127.0.0.1:8000 --access-logfile - --error-logfile - run:app
 Restart=always
 RestartSec=5
 

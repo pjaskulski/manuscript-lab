@@ -4,10 +4,11 @@ import asyncio
 import time
 from dataclasses import dataclass
 
+import httpx
 from flask import current_app
 from google import genai
 from google.genai import types
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
 
 from ..models.parameter import ParameterModel, ParameterPrompt
 
@@ -160,17 +161,26 @@ def _translate_with_gemini(text: str, model_code: str, prompt_name: str | None) 
 
     prompt_payload = _build_translation_prompt_payload(text=text, prompt_name=prompt_name)
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=model_code,
-        contents=prompt_payload.user_prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=prompt_payload.system_prompt,
-            temperature=0.2,
-            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        ),
+    timeout_seconds = _provider_timeout_seconds()
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=timeout_seconds * 1000),
     )
+    try:
+        response = client.models.generate_content(
+            model=model_code,
+            contents=prompt_payload.user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=prompt_payload.system_prompt,
+                temperature=0.2,
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+            ),
+        )
+    except httpx.TimeoutException as exc:
+        raise TranslationProviderError(
+            f"Gemini nie odpowiedział w czasie {timeout_seconds} s. Skróć tekst, wybierz szybszy model albo zwiększ limit czasu."
+        ) from exc
 
     translated_text = (response.text or "").strip()
     if not translated_text:
@@ -187,18 +197,33 @@ def _translate_with_openai(text: str, model_code: str, prompt_name: str | None) 
 
     prompt_payload = _build_translation_prompt_payload(text=text, prompt_name=prompt_name)
 
-    client = OpenAI(api_key=api_key)
-    response = client.responses.create(
-        model=model_code,
-        temperature=0.2,
-        instructions=prompt_payload.system_prompt,
-        input=prompt_payload.user_prompt,
-    )
+    timeout_seconds = _provider_timeout_seconds()
+    client = OpenAI(api_key=api_key, timeout=timeout_seconds)
+    try:
+        response = client.responses.create(
+            model=model_code,
+            temperature=0.2,
+            instructions=prompt_payload.system_prompt,
+            input=prompt_payload.user_prompt,
+        )
+    except APITimeoutError as exc:
+        raise TranslationProviderError(
+            f"OpenAI nie odpowiedział w czasie {timeout_seconds} s. Skróć tekst, wybierz szybszy model albo zwiększ limit czasu."
+        ) from exc
 
     translated_text = (response.output_text or "").strip()
     if not translated_text:
         raise TranslationProviderError("Model OpenAI nie zwrócił tłumaczenia.")
     return translated_text
+
+
+def _provider_timeout_seconds() -> int:
+    configured = current_app.config.get("TRANSLATION_PROVIDER_TIMEOUT_SECONDS", 25)
+    try:
+        timeout = int(configured)
+    except (TypeError, ValueError):
+        timeout = 25
+    return max(1, timeout)
 
 
 @dataclass(slots=True)

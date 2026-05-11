@@ -256,9 +256,18 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
                 },
                 body: new FormData(form),
             });
-            const payload = await response.json();
+            const contentType = response.headers.get("content-type") || "";
+            const payload = contentType.includes("application/json")
+                ? await response.json()
+                : null;
             if (!response.ok) {
-                throw new Error(payload.error || "Nie udało się wygenerować tłumaczenia.");
+                const fallbackMessage = response.status === 500
+                    ? "Serwer przerwał generowanie tłumaczenia. Najczęściej oznacza to timeout modelu lub Gunicorna."
+                    : "Nie udało się wygenerować tłumaczenia.";
+                throw new Error((payload && payload.error) || fallbackMessage);
+            }
+            if (!payload) {
+                throw new Error("Serwer zwrócił odpowiedź w nieoczekiwanym formacie zamiast JSON.");
             }
             stopProgressTimer();
             contentField.value = payload.content || "";
@@ -277,7 +286,7 @@ const translationModelMetadata = {{ translation_model_metadata|tojson }};
             stopProgressTimer();
             refreshAutoTranslateState(error.message || "Nie udało się wygenerować tłumaczenia.", true);
         } finally {
-            autoButton.disabled = !hasSourceText || !selectedMetadata().supports_auto_translation;
+            autoButton.disabled = isReferenceVariant() || !hasSourceText || !selectedMetadata().supports_auto_translation;
         }
     });
 })();

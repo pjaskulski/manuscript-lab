@@ -20,6 +20,7 @@ class Config:
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
     TRANSLATION_SOURCE_LANGUAGE = os.environ.get("TRANSLATION_SOURCE_LANGUAGE")
     TRANSLATION_TARGET_LANGUAGE = os.environ.get("TRANSLATION_TARGET_LANGUAGE", "PL")
+    TRANSLATION_PROVIDER_TIMEOUT_SECONDS = os.environ.get("TRANSLATION_PROVIDER_TIMEOUT_SECONDS", "25")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
         f"sqlite:///{(INSTANCE_DIR / 'app.db').as_posix()}",
