@@ -202,7 +202,6 @@ def _translate_with_openai(text: str, model_code: str, prompt_name: str | None) 
     try:
         response = client.responses.create(
             model=model_code,
-            temperature=0.2,
             instructions=prompt_payload.system_prompt,
             input=prompt_payload.user_prompt,
         )
