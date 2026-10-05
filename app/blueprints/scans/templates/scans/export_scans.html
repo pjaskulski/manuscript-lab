@@ -2,8 +2,8 @@
 {% block head %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const form = document.getElementById("training-export-form");
-    const submitButton = document.getElementById("training-export-submit");
+    const form = document.getElementById("scan-export-form");
+    const submitButton = document.getElementById("scan-export-submit");
 
     if (!form || !submitButton) {
         return;
@@ -16,19 +16,19 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
-{% block title %}Eksport próbki uczącej{% endblock %}
+{% block title %}Eksport {{ export_name }}{% endblock %}
 {% block content %}
-<h1>Eksport próbki uczącej</h1>
-<p class="muted">Eksport obejmuje tylko skany oznaczone jako Do próbki uczącej, które mają wskazaną podstawową wersję ground truth.</p>
+<h1>Eksport {{ export_name }}</h1>
+<p class="muted">Eksport obejmuje skany oznaczone jako „{{ marker_label }}”, które mają obraz i wskazaną podstawową wersję ground truth.</p>
 <div class="card" style="margin-bottom: 1rem;">
     <p><strong>Liczba skanów gotowych do eksportu:</strong> {{ candidate_count }}</p>
     <p class="muted">Przygotowanie paczki ZIP może potrwać chwilę, szczególnie przy dołączaniu obrazów.</p>
 </div>
-<form method="post" class="card" id="training-export-form">
+<form method="post" class="card" id="scan-export-form">
     {{ form.hidden_tag() }}
     <div class="checkbox-field">{{ form.include_images() }} {{ form.include_images.label }}</div>
     <div class="actions">
-        {{ form.submit(class_="btn btn-primary", id="training-export-submit") }}
+        {{ form.submit(class_="btn btn-primary", id="scan-export-submit") }}
         <a class="btn" href="{{ cancel_url }}">Anuluj</a>
     </div>
 </form>

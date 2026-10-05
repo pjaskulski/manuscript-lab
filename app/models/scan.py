@@ -13,6 +13,7 @@ class Scan(TimestampMixin, db.Model):
     hand = db.Column(db.String(128), nullable=True)
     notes = db.Column(db.Text, nullable=True)
     is_training_sample = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    is_test_material = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     is_done = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     image_path = db.Column(db.String(512), nullable=True)

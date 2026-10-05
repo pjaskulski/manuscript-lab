@@ -68,7 +68,7 @@ Projekt przygotowywany z użyciem AI (Codex 5.4)
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ## Uruchomienie

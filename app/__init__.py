@@ -160,6 +160,19 @@ def _ensure_sqlite_compat_schema(app: Flask) -> None:
                 connection.execute(
                     text("ALTER TABLE scans ADD COLUMN is_training_sample BOOLEAN NOT NULL DEFAULT 0")
                 )
+        if "is_test_material" not in scan_columns:
+            with db.engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE scans ADD COLUMN is_test_material BOOLEAN NOT NULL DEFAULT 0")
+                )
+        with db.engine.begin() as connection:
+            overlapping_scan = connection.execute(
+                text("SELECT 1 FROM scans WHERE is_training_sample = 1 AND is_test_material = 1 LIMIT 1")
+            ).first()
+            if overlapping_scan:
+                connection.execute(
+                    text("UPDATE scans SET is_training_sample = 0 WHERE is_training_sample = 1 AND is_test_material = 1")
+                )
         if "is_done" not in scan_columns:
             with db.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE scans ADD COLUMN is_done BOOLEAN NOT NULL DEFAULT 0"))

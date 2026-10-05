@@ -9,6 +9,11 @@ ALLOWED_SCAN_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "tif", "tiff"]
 MAX_BULK_IMPORT_FILES = 20
 
 
+def validate_exclusive_sample_flags(form, field):
+    if form.is_training_sample.data and field.data:
+        raise ValidationError("Skan nie może jednocześnie należeć do próbki uczącej i materiału testowego.")
+
+
 class ScanForm(FlaskForm):
     version_token = HiddenField()
     title = StringField("Tytuł", validators=[DataRequired()])
@@ -18,6 +23,7 @@ class ScanForm(FlaskForm):
     hand = StringField("Ręka", validators=[Optional()])
     notes = TextAreaField("Uwagi", validators=[Optional()])
     is_training_sample = BooleanField("Do próbki uczącej")
+    is_test_material = BooleanField("Materiał testowy", validators=[validate_exclusive_sample_flags])
     is_done = BooleanField("Gotowe")
     image_file = FileField(
         "Obraz skanu",
@@ -31,6 +37,7 @@ class BulkScanImportForm(FlaskForm):
     hand = StringField("Ręka domyślna", validators=[Optional()])
     notes = TextAreaField("Wspólne uwagi", validators=[Optional()])
     is_training_sample = BooleanField("Do próbki uczącej")
+    is_test_material = BooleanField("Materiał testowy", validators=[validate_exclusive_sample_flags])
     image_files = MultipleFileField(
         "Pliki skanów",
         validators=[FileAllowed(ALLOWED_SCAN_EXTENSIONS, "Niedozwolony format.")],
@@ -52,6 +59,6 @@ class BulkScanImportForm(FlaskForm):
             raise ValidationError(f"Niedozwolony format pliku: {', '.join(invalid)}.")
 
 
-class ScanTrainingExportForm(FlaskForm):
+class ScanExportForm(FlaskForm):
     include_images = BooleanField("Dołącz pliki skanów")
     submit = SubmitField("Przygotuj paczkę ZIP")

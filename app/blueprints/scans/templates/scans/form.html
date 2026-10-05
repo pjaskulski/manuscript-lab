@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
+{% block head %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/scan_set_exclusion.js') }}" defer></script>
+{% endblock %}
 {% block content %}
 <h1>{{ title }}</h1>
 <form method="post" enctype="multipart/form-data" class="card">
@@ -15,6 +19,8 @@
     <div>{{ form.hand.label }} {{ form.hand() }}</div>
     <div>{{ form.notes.label }} {{ form.notes() }}</div>
     <div class="checkbox-field">{{ form.is_training_sample() }} {{ form.is_training_sample.label }}</div>
+    <div class="checkbox-field">{{ form.is_test_material() }} {{ form.is_test_material.label }}</div>
+    {% for error in form.is_test_material.errors %}<div class="flash danger">{{ error }}</div>{% endfor %}
     <div class="checkbox-field">{{ form.is_done() }} {{ form.is_done.label }}</div>
     <div>
         {{ form.image_file.label }} {{ form.image_file() }}

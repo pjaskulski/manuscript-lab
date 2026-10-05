@@ -1,6 +1,3 @@
-import io
-import string
-import zipfile
 from pathlib import Path
 from unicodedata import normalize
 
@@ -11,32 +8,12 @@ from ...models import HTRComparison, Scan, ScanText
 from ...services.concurrency import bind_version_token, ensure_version_token_matches
 from ..htr.forms import GROUND_TRUTH_TEXT_TYPES
 from ...services.file_storage import ensure_scan_thumbnail, save_scan_image, thumbnail_relative_path_for
-from .forms import BulkScanImportForm, MAX_BULK_IMPORT_FILES, ScanForm, ScanTrainingExportForm
+from ...services.scan_export import build_scan_export_archive
+from .forms import BulkScanImportForm, MAX_BULK_IMPORT_FILES, ScanExportForm, ScanForm
 
 scans_bp = Blueprint("scans", __name__, template_folder="templates")
 
 BOOLEAN_FILTER_VALUES = {"", "yes", "no"}
-
-
-def _original_scan_filename(filename: str | None) -> str | None:
-    if not filename:
-        return None
-    prefix, separator, rest = filename.partition("_")
-    if separator and len(prefix) == 32 and all(char in string.hexdigits for char in prefix):
-        return rest
-    return filename
-
-
-def _unique_archive_name(name: str, used_names: set[str]) -> str:
-    candidate = name
-    stem = Path(name).stem
-    suffix = Path(name).suffix
-    counter = 2
-    while candidate in used_names:
-        candidate = f"{stem}_{counter}{suffix}"
-        counter += 1
-    used_names.add(candidate)
-    return candidate
 
 
 def _scan_title_from_filename(filename: str | None) -> str:
@@ -47,9 +24,9 @@ def _scan_title_from_filename(filename: str | None) -> str:
     return " ".join(cleaned.split()) or stem or "Nowy skan"
 
 
-def _training_export_candidates() -> list[tuple[Scan, ScanText]]:
+def _export_candidates(marker_column, opposing_column) -> list[tuple[Scan, ScanText]]:
     candidates: list[tuple[Scan, ScanText]] = []
-    scans = Scan.query.filter_by(is_training_sample=True).order_by(Scan.id.asc()).all()
+    scans = Scan.query.filter(marker_column.is_(True), opposing_column.is_(False)).order_by(Scan.id.asc()).all()
     for scan in scans:
         if not scan.image_path:
             continue
@@ -89,6 +66,11 @@ SCAN_SORT_FIELDS = {
         (Scan.is_training_sample.asc(), Scan.id.asc())
         if direction == "asc"
         else (Scan.is_training_sample.desc(), Scan.id.asc())
+    ),
+    "is_test_material": lambda direction: (
+        (Scan.is_test_material.asc(), Scan.id.asc())
+        if direction == "asc"
+        else (Scan.is_test_material.desc(), Scan.id.asc())
     ),
     "is_done": lambda direction: (
         (Scan.is_done.asc(), Scan.id.asc())
@@ -156,6 +138,7 @@ def _normalize_boolean_filter(value: str | None) -> str:
 def _filtered_scans_query(
     query_text: str,
     training_sample_filter: str = "",
+    test_material_filter: str = "",
     done_filter: str = "",
 ):
     query = Scan.query
@@ -174,6 +157,11 @@ def _filtered_scans_query(
     elif training_sample_filter == "no":
         query = query.filter(Scan.is_training_sample.is_(False))
 
+    if test_material_filter == "yes":
+        query = query.filter(Scan.is_test_material.is_(True))
+    elif test_material_filter == "no":
+        query = query.filter(Scan.is_test_material.is_(False))
+
     if done_filter == "yes":
         query = query.filter(Scan.is_done.is_(True))
     elif done_filter == "no":
@@ -188,6 +176,7 @@ def _scan_neighbors(
     sort_by: str,
     sort_dir: str,
     training_sample_filter: str = "",
+    test_material_filter: str = "",
     done_filter: str = "",
 ) -> tuple[Scan | None, Scan | None]:
     scan_ids = [
@@ -195,6 +184,7 @@ def _scan_neighbors(
         for current_scan_id, in _filtered_scans_query(
             query_text,
             training_sample_filter=training_sample_filter,
+            test_material_filter=test_material_filter,
             done_filter=done_filter,
         )
         .with_entities(Scan.id)
@@ -216,6 +206,7 @@ def list_scans():
     sort_by = request.args.get("sort_by", "id")
     sort_dir = request.args.get("sort_dir", "asc")
     training_sample_filter = _normalize_boolean_filter(request.args.get("training_sample_filter"))
+    test_material_filter = _normalize_boolean_filter(request.args.get("test_material_filter"))
     done_filter = _normalize_boolean_filter(request.args.get("done_filter"))
     if sort_by not in SCAN_SORT_FIELDS:
         sort_by = "id"
@@ -224,6 +215,7 @@ def list_scans():
     scans = _filtered_scans_query(
         q,
         training_sample_filter=training_sample_filter,
+        test_material_filter=test_material_filter,
         done_filter=done_filter,
     ).order_by(*SCAN_SORT_FIELDS[sort_by](sort_dir)).all()
     scan_ids = [scan.id for scan in scans]
@@ -245,54 +237,66 @@ def list_scans():
         sort_by=sort_by,
         sort_dir=sort_dir,
         training_sample_filter=training_sample_filter,
+        test_material_filter=test_material_filter,
         done_filter=done_filter,
-        has_advanced_filters=bool(training_sample_filter or done_filter),
+        has_advanced_filters=bool(training_sample_filter or test_material_filter or done_filter),
     )
 
 
 @scans_bp.route("/export-training-sample", methods=["GET", "POST"])
 def export_training_sample():
-    form = ScanTrainingExportForm()
-    candidates = _training_export_candidates()
+    return _export_marked_scans(
+        Scan.is_training_sample,
+        Scan.is_test_material,
+        export_name="próbki uczącej",
+        marker_label="Do próbki uczącej",
+        download_name="probka_uczaca.zip",
+    )
+
+
+@scans_bp.route("/export-test-material", methods=["GET", "POST"])
+def export_test_material():
+    return _export_marked_scans(
+        Scan.is_test_material,
+        Scan.is_training_sample,
+        export_name="materiału testowego",
+        marker_label="Materiał testowy",
+        download_name="material_testowy.zip",
+    )
+
+
+def _export_marked_scans(marker_column, opposing_column, *, export_name: str, marker_label: str, download_name: str):
+    form = ScanExportForm()
+    candidates = _export_candidates(marker_column, opposing_column)
     cancel_url = url_for("scans.list_scans")
 
     if form.validate_on_submit():
         if not candidates:
             flash(
-                "Brak skanów kwalifikujących się do eksportu próbki uczącej.",
+                f"Brak skanów kwalifikujących się do eksportu {export_name}.",
                 "warning",
             )
-            return redirect(url_for("scans.list_scans"))
+            return redirect(cancel_url)
 
-        archive_buffer = io.BytesIO()
-        used_names: set[str] = set()
-        upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
-
-        with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for scan, text in candidates:
-                original_image_name = _original_scan_filename(scan.image_path) or f"scan_{scan.id}"
-                text_name = _unique_archive_name(f"{Path(original_image_name).stem}.txt", used_names)
-                archive.writestr(text_name, text.content or "")
-
-                if form.include_images.data:
-                    image_path = upload_dir / scan.image_path
-                    if image_path.exists():
-                        image_name = _unique_archive_name(original_image_name, used_names)
-                        archive.write(image_path, arcname=image_name)
-
-        archive_buffer.seek(0)
+        archive_buffer = build_scan_export_archive(
+            ((scan.image_path, text.content or "") for scan, text in candidates),
+            Path(current_app.config["UPLOAD_FOLDER"]),
+            include_images=form.include_images.data,
+        )
         return send_file(
             archive_buffer,
             as_attachment=True,
-            download_name="probka_uczaca.zip",
+            download_name=download_name,
             mimetype="application/zip",
         )
 
     return render_template(
-        "scans/export_training_sample.html",
+        "scans/export_scans.html",
         form=form,
         candidate_count=len(candidates),
         cancel_url=cancel_url,
+        export_name=export_name,
+        marker_label=marker_label,
     )
 
 
@@ -309,6 +313,7 @@ def new_scan():
             hand=form.hand.data,
             notes=form.notes.data,
             is_training_sample=form.is_training_sample.data,
+            is_test_material=form.is_test_material.data,
             is_done=form.is_done.data,
         )
         if form.image_file.data:
@@ -345,6 +350,7 @@ def bulk_import_scans():
                     hand=form.hand.data,
                     notes=form.notes.data,
                     is_training_sample=form.is_training_sample.data,
+                    is_test_material=form.is_test_material.data,
                     image_path=stored["image_path"],
                     image_width=stored["image_width"],
                     image_height=stored["image_height"],
@@ -384,6 +390,7 @@ def scan_detail(scan_id: int):
     sort_by = request.args.get("sort_by", "id")
     sort_dir = request.args.get("sort_dir", "asc")
     training_sample_filter = _normalize_boolean_filter(request.args.get("training_sample_filter"))
+    test_material_filter = _normalize_boolean_filter(request.args.get("test_material_filter"))
     done_filter = _normalize_boolean_filter(request.args.get("done_filter"))
     text_sort_by = request.args.get("text_sort_by", "id")
     text_sort_dir = request.args.get("text_sort_dir", "asc")
@@ -409,6 +416,7 @@ def scan_detail(scan_id: int):
         sort_by,
         sort_dir,
         training_sample_filter=training_sample_filter,
+        test_material_filter=test_material_filter,
         done_filter=done_filter,
     )
     return render_template(
@@ -420,6 +428,7 @@ def scan_detail(scan_id: int):
         sort_by=sort_by,
         sort_dir=sort_dir,
         training_sample_filter=training_sample_filter,
+        test_material_filter=test_material_filter,
         done_filter=done_filter,
         previous_scan=previous_scan,
         next_scan=next_scan,
